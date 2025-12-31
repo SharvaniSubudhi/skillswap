@@ -211,7 +211,7 @@ export default function ProfilePage() {
                                                     <Paperclip className="h-5 w-5 text-muted-foreground"/>
                                                     <span className="text-sm font-medium">{form.watch("studentIdProof")}</span>
                                                 </div>
-                                                <Button variant="ghost" size="sm" onClick={() => form.setValue("studentIdProof", "")}>Change</Button>
+                                                <Button variant="ghost" size="sm" onClick={() => { form.setValue("studentIdProof", ""); setStudentIdFile(null); }}>Change</Button>
                                              </div>
                                         ) : (
                                             <div className="flex items-center gap-4 p-4 rounded-lg border-dashed border-2">
@@ -345,7 +345,7 @@ export default function ProfilePage() {
                                 </div>
 
                                 <div className="pt-6">
-                                     <Button type="submit">Save Availability</Button>
+                                     <Button type="submit">Save All Changes</Button>
                                 </div>
                             </div>
                         </TabsContent>
@@ -357,3 +357,5 @@ export default function ProfilePage() {
 
     
 }
+
+    
