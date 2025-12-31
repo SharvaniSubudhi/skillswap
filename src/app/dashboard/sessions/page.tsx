@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { sessions, currentUser } from "@/lib/data";
 import type { Session } from "@/lib/types";
-import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { Video, Star, MessageSquare, AlertCircle, Check, X } from "lucide-react";
 import { createSession } from "@/ai/flows/create-session";
 import { useToast } from "@/hooks/use-toast";
@@ -89,7 +89,7 @@ const SessionCard = ({ session }: { session: Session }) => {
                     <div>
                         <CardTitle className="font-headline text-lg">{session.skill}</CardTitle>
                         <CardDescription>
-                            {format(session.sessionDate, "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                            {formatInTimeZone(session.sessionDate, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}
                         </CardDescription>
                     </div>
                     <Badge className={`${statusColors[session.status]} border-0 capitalize`}>{session.status}</Badge>
@@ -195,7 +195,7 @@ const RequestCard = ({ session }: { session: Session }) => {
             </CardHeader>
              <CardContent>
                 <p className="text-sm text-muted-foreground">
-                    Request for a {session.duration}-hour session on {format(session.sessionDate, "EEEE, MMMM d 'at' h:mm a")}.
+                    Request for a {session.duration}-hour session on {formatInTimeZone(session.sessionDate, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}.
                 </p>
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
