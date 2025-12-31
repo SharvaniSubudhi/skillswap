@@ -1,0 +1,155 @@
+/**
+ * Core Philosophy: This ruleset enforces a strict user-ownership model for most data,
+ * ensuring users can only access and manage their own information. Data is segregated
+ * into user-specific trees (e.g., /users/{userId}) and shared, top-level collections
+ * (e.g., /sessions).
+ *
+ * Data Structure:
+ * - /users/{userId}: A user's profile document. A user can only access their own document.
+ * - /users/{userId}/skillVerifications/{skillVerificationId}: A user's private skill
+ *   verification records, inheriting ownership from the parent user document.
+ * - /sessions/{sessionId}: A top-level collection for collaborative teaching sessions.
+ *   Access is granted based on denormalized `teacherId` and `learnerId` fields within
+ *   each session document, avoiding slow and costly lookups.
+ *
+ * Key Security Decisions:
+ * - Default Deny: All operations are denied unless explicitly allowed.
+ * - No User Listing: To protect user privacy, it is not possible to list all documents
+ *   in the top-level `/users` collection.
+ * - No Public Session Listing: To prevent data leakage, listing all sessions is disabled.
+ *   Clients must construct specific, authenticated queries (e.g., finding sessions where
+ *   they are a participant) which can be secured separately if needed.
+ * - Relational Integrity: On document creation, rules validate that ownership fields
+ *   (e.g., `userId`) match the document path to ensure data consistency. These fields are
+ *   enforced as immutable on updates.
+ *
+ * Denormalization for Authorization:
+ * The `/sessions` collection is a key example of this principle. Instead of requiring a
+ * rule to perform a `get()` on a separate document to check for membership, the `teacherId`
+ * and `learnerId` are denormalized (copied) directly onto the session document. This
+ * allows for a simple, performant, and secure rule like `isSessionParticipant()`.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------------------------
+    // Helper Functions
+    // ----------------------------------------------------------------------
+
+    /**
+     * Returns true if the user is signed in.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the authenticated user's ID matches the provided userId.
+     * This is the primary function for enforcing document ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    /**
+     * Returns true if the document being accessed already exists.
+     * Used in update/delete rules to prevent acting on non-existent data.
+     */
+    function docExists() {
+      return resource != null;
+    }
+
+    /**
+     * Returns true if the user is a participant (teacher or learner) in a session.
+     * Checks against the existing document's data.
+     */
+    function isSessionParticipant() {
+      return isSignedIn() && (resource.data.teacherId == request.auth.uid || resource.data.learnerId == request.auth.uid);
+    }
+    
+    /**
+     * Returns true if the user creating a session is listed as a participant.
+     * Checks against the incoming request's data.
+     */
+    function isCreatingOwnSession() {
+      return isSignedIn() && (request.resource.data.teacherId == request.auth.uid || request.resource.data.learnerId == request.auth.uid);
+    }
+
+    /**
+     * Enforces immutability of core user identifiers during an update.
+     */
+    function hasImmutableUserFields() {
+      return request.resource.data.id == resource.data.id && request.resource.data.email == resource.data.email;
+    }
+    
+    /**
+     * Enforces immutability of session participant IDs during an update.
+     */
+    function hasImmutableSessionParticipants() {
+      return request.resource.data.teacherId == resource.data.teacherId && request.resource.data.learnerId == resource.data.learnerId;
+    }
+    
+    /**
+     * Enforces immutability of the skill verification owner ID during an update.
+     */
+    function hasImmutableOwner() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    // ----------------------------------------------------------------------
+    // Collection Rules
+    // ----------------------------------------------------------------------
+
+    /**
+     * @description Controls access to a user's own profile document.
+     * @path /users/{userId}
+     * @allow (get) A user (auth.uid='user123') can read their own profile at `/users/user123`.
+     * @allow (update) A user (auth.uid='user123') can update their profile at `/users/user123`.
+     * @deny (get) A different user (auth.uid='user456') is denied from reading `/users/user123`.
+     * @deny (list) No user can list all documents in the `/users` collection.
+     * @principle Restricts access to a user's own data tree and enforces relational integrity.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && docExists() && hasImmutableUserFields();
+      allow delete: if isOwner(userId) && docExists();
+
+      /**
+       * @description Controls access to a user's private skill verification records.
+       * @path /users/{userId}/skillVerifications/{skillVerificationId}
+       * @allow (create) A user (auth.uid='user123') can create a new skill verification for themselves.
+       * @allow (list) A user (auth.uid='user123') can list all of their own skill verifications.
+       * @deny (get) A different user (auth.uid='user456') cannot read a skill verification belonging to 'user123'.
+       * @deny (update) A user cannot change the `userId` field after creation.
+       * @principle Enforces inherited document ownership from the parent path.
+       */
+      match /skillVerifications/{skillVerificationId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.userId == userId;
+        allow update: if isOwner(userId) && docExists() && hasImmutableOwner();
+        allow delete: if isOwner(userId) && docExists();
+      }
+    }
+
+    /**
+     * @description Controls access to shared session documents between two users.
+     * @path /sessions/{sessionId}
+     * @allow (get) A teacher (auth.uid='teacher123') can read a session where `teacherId` is 'teacher123'.
+     * @allow (create) A learner (auth.uid='learner456') can create a new session where `learnerId` is 'learner456'.
+     * @deny (list) No user can list all documents in the `/sessions` collection to prevent data leaks.
+     * @deny (update) A user cannot change the `teacherId` or `learnerId` of an existing session.
+     * @principle Secures shared documents using denormalized authorization fields (`teacherId`, `learnerId`).
+     */
+    match /sessions/{sessionId} {
+      allow get: if isSessionParticipant();
+      allow list: if false;
+      allow create: if isCreatingOwnSession();
+      allow update: if isSessionParticipant() && docExists() && hasImmutableSessionParticipants();
+      allow delete: if isSessionParticipant() && docExists();
+    }
+  }
+}
