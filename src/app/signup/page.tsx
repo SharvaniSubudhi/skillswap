@@ -66,7 +66,7 @@ export default function SignupPage() {
         skillsKnown: [],
         skillsWanted: [],
         availability: [],
-        credits: 3,
+        credits: 5,
         rating: 0,
         badges: [],
         status: 'online',
