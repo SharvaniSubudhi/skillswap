@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -38,6 +39,7 @@ const profileSchema = z.object({
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
+type SkillLevel = "basic" | "intermediate" | "advanced";
 
 const getInitials = (name: string = "") => {
     const names = name.split(' ');
@@ -49,6 +51,9 @@ export default function ProfilePage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(true);
     const [userProfile, setUserProfile] = React.useState<any>(null);
+    const [newSkillName, setNewSkillName] = React.useState("");
+    const [newSkillLevel, setNewSkillLevel] = React.useState<SkillLevel>("basic");
+    const [newWantedSkill, setNewWantedSkill] = React.useState("");
 
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
@@ -207,8 +212,15 @@ export default function ProfilePage() {
                                         ))}
                                     </div>
                                     <div className="mt-4 flex gap-2">
-                                        <Input placeholder="e.g. Python" id="new-skill-known" />
-                                        <Select defaultValue="basic" id="new-skill-level">
+                                        <Input 
+                                            placeholder="e.g. Python" 
+                                            value={newSkillName}
+                                            onChange={(e) => setNewSkillName(e.target.value)}
+                                        />
+                                        <Select 
+                                            value={newSkillLevel} 
+                                            onValueChange={(value: SkillLevel) => setNewSkillLevel(value)}
+                                        >
                                             <SelectTrigger className="w-[150px]">
                                                 <SelectValue placeholder="Level" />
                                             </SelectTrigger>
@@ -219,11 +231,10 @@ export default function ProfilePage() {
                                             </SelectContent>
                                         </Select>
                                         <Button type="button" onClick={() => {
-                                            const skillName = (document.getElementById('new-skill-known') as HTMLInputElement).value;
-                                            const level = (document.getElementById('new-skill-level') as HTMLInputElement).value as "basic" | "intermediate" | "advanced";
-                                            if (skillName) {
-                                                appendSkillKnown({ skillName, level });
-                                                (document.getElementById('new-skill-known') as HTMLInputElement).value = '';
+                                            if (newSkillName) {
+                                                appendSkillKnown({ skillName: newSkillName, level: newSkillLevel });
+                                                setNewSkillName('');
+                                                setNewSkillLevel('basic');
                                             }
                                         }}>Add Skill</Button>
                                     </div>
@@ -240,12 +251,15 @@ export default function ProfilePage() {
                                         ))}
                                     </div>
                                     <div className="mt-4 flex gap-2">
-                                        <Input placeholder="e.g. Graphic Design" id="new-skill-wanted" />
+                                        <Input 
+                                            placeholder="e.g. Graphic Design" 
+                                            value={newWantedSkill}
+                                            onChange={(e) => setNewWantedSkill(e.target.value)}
+                                        />
                                         <Button type="button" onClick={() => {
-                                            const skillName = (document.getElementById('new-skill-wanted') as HTMLInputElement).value;
-                                            if (skillName) {
-                                                appendSkillWanted({ skillName });
-                                                (document.getElementById('new-skill-wanted') as HTMLInputElement).value = '';
+                                            if (newWantedSkill) {
+                                                appendSkillWanted({ skillName: newWantedSkill });
+                                                setNewWantedSkill('');
                                             }
                                         }}>Add Skill</Button>
                                     </div>
@@ -263,4 +277,5 @@ export default function ProfilePage() {
             </div>
         </form>
     );
-}
+
+    
