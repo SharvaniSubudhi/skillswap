@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { useFirebase } from "@/firebase"
+import { useFirebase, useMemoFirebase } from "@/firebase"
 import { collection, query, where } from "firebase/firestore"
 import { useCollection } from "@/firebase/firestore/use-collection"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,7 +21,7 @@ const statusColors: { [key: string]: string } = {
 };
 
 export default function DisputesPage() {
-  const { user, firestore, useMemoFirebase } = useFirebase();
+  const { user, firestore } = useFirebase();
 
   const disputesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
