@@ -1,3 +1,4 @@
+
 "use client";
 
 import { users, sessions, currentUser } from "@/lib/data";
@@ -15,7 +16,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { requestSession } from "@/ai/flows/request-session";
-import type { RequestSessionInput } from "@/ai/flows/request-session";
+
+type RequestSessionInput = {
+    teacher: { name: string, email: string };
+    learner: { name: string, email: string };
+    skill: string;
+    sessionDetails: string;
+};
 
 
 const getInitials = (name: string) => {

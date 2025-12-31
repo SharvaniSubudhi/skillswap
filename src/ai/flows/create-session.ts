@@ -119,22 +119,22 @@ const sendEmail = ai.defineTool(
   
 
 // Define the main flow schema
-export const CreateSessionInputSchema = z.object({
+const CreateSessionInputSchema = z.object({
   teacher: z.object({ name: z.string(), email: z.string().email() }),
   learner: z.object({ name: z.string(), email: z.string().email() }),
   skill: z.string(),
   sessionDate: z.string().datetime(),
   duration: z.number().describe('Duration in hours'),
 });
-export type CreateSessionInput = z.infer<typeof CreateSessionInputSchema>;
+type CreateSessionInput = z.infer<typeof CreateSessionInputSchema>;
 
-export const CreateSessionOutputSchema = z.object({
+const CreateSessionOutputSchema = z.object({
   success: z.boolean(),
   message: z.string(),
   meetLink: z.string().optional(),
   calendarLink: z.string().optional(),
 });
-export type CreateSessionOutput = z.infer<typeof CreateSessionOutputSchema>;
+type CreateSessionOutput = z.infer<typeof CreateSessionOutputSchema>;
 
 
 // Define the main flow

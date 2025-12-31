@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -30,28 +31,36 @@ const UserProfileSchema = z.object({
   rating: z.number(),
 });
 
-export type RecommendMatchesInput = z.object({
+type RecommendMatchesInput = z.infer<typeof z.object({
   userProfile: UserProfileSchema,
-});
+})>;
 
-export type RecommendMatchesOutput = z.array(z.object({
+type RecommendMatchesOutput = z.infer<typeof z.array(z.object({
   userId: z.string(),
   matchScore: z.number().describe('A score indicating the strength of the match.'),
   reason: z.string().describe('Explanation of why this user is a good match'),
-}));
+}))>;
+
 
 export async function recommendMatches(input: RecommendMatchesInput): Promise<RecommendMatchesOutput> {
   return recommendMatchesFlow(input);
 }
 
-const recommendMatchesPrompt = ai.definePrompt({
-  name: 'recommendMatchesPrompt',
-  input: {schema: RecommendMatchesInput},
-  output: {schema: z.array(z.object({
+const RecommendMatchesInputSchema = z.object({
+    userProfile: UserProfileSchema,
+  });
+
+const RecommendMatchesOutputSchema = z.array(z.object({
     userId: z.string(),
     matchScore: z.number().describe('A score indicating the strength of the match.'),
     reason: z.string().describe('Explanation of why this user is a good match'),
-  }))},
+  }));
+
+
+const recommendMatchesPrompt = ai.definePrompt({
+  name: 'recommendMatchesPrompt',
+  input: {schema: RecommendMatchesInputSchema},
+  output: {schema: RecommendMatchesOutputSchema},
   prompt: `You are an AI assistant designed to recommend potential matches between users for skill swapping.
 
   Given a user's profile, identify other users who might be good matches either as teachers or learners.
@@ -77,8 +86,8 @@ const recommendMatchesPrompt = ai.definePrompt({
 const recommendMatchesFlow = ai.defineFlow(
   {
     name: 'recommendMatchesFlow',
-    inputSchema: RecommendMatchesInput,
-    outputSchema: RecommendMatchesOutput,
+    inputSchema: RecommendMatchesInputSchema,
+    outputSchema: RecommendMatchesOutputSchema,
   },
   async input => {
     const {output} = await recommendMatchesPrompt(input);

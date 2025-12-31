@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -18,7 +19,7 @@ const SkillLevelVerificationInputSchema = z.object({
     .enum(['basic', 'intermediate', 'advanced'])
     .describe('The claimed skill level (basic, intermediate, or advanced).'),
 });
-export type SkillLevelVerificationInput = z.infer<typeof SkillLevelVerificationInputSchema>;
+type SkillLevelVerificationInput = z.infer<typeof SkillLevelVerificationInputSchema>;
 
 const SkillLevelVerificationOutputSchema = z.object({
   testResult: z
@@ -26,7 +27,7 @@ const SkillLevelVerificationOutputSchema = z.object({
     .describe('The result of the skill verification test.'),
   feedback: z.string().describe('Feedback from the Gemini model on the skill level.'),
 });
-export type SkillLevelVerificationOutput = z.infer<typeof SkillLevelVerificationOutputSchema>;
+type SkillLevelVerificationOutput = z.infer<typeof SkillLevelVerificationOutputSchema>;
 
 export async function verifySkillLevel(input: SkillLevelVerificationInput): Promise<SkillLevelVerificationOutput> {
   return verifySkillLevelFlow(input);

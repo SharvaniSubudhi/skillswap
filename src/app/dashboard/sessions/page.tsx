@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -10,8 +11,17 @@ import { sessions, currentUser } from "@/lib/data";
 import type { Session } from "@/lib/types";
 import { format } from "date-fns";
 import { Video, Star, MessageSquare, AlertCircle, Check, X } from "lucide-react";
-import { createSession, type CreateSessionInput } from "@/ai/flows/create-session";
+import { createSession } from "@/ai/flows/create-session";
 import { useToast } from "@/hooks/use-toast";
+
+type CreateSessionInput = {
+    teacher: { name: string, email: string };
+    learner: { name: string, email: string };
+    skill: string;
+    sessionDate: string;
+    duration: number;
+};
+
 
 const getInitials = (name: string) => {
     const names = name.split(' ');
