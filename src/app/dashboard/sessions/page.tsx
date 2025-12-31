@@ -1,3 +1,5 @@
+"use client";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -7,6 +9,8 @@ import { sessions, currentUser } from "@/lib/data";
 import type { Session } from "@/lib/types";
 import { format } from "date-fns";
 import { Video, Star, MessageSquare } from "lucide-react";
+import { createSession, type CreateSessionInput } from "@/ai/flows/create-session";
+import { useToast } from "@/hooks/use-toast";
 
 const getInitials = (name: string) => {
     const names = name.split(' ');
@@ -14,6 +18,7 @@ const getInitials = (name: string) => {
 };
 
 const SessionCard = ({ session }: { session: Session }) => {
+    const { toast } = useToast();
     const isTeacher = session.teacher.id === currentUser.id;
     const otherUser = isTeacher ? session.learner : session.teacher;
 
@@ -22,6 +27,47 @@ const SessionCard = ({ session }: { session: Session }) => {
         completed: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
         cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
     };
+
+    const handleJoinNow = async () => {
+        if (session.googleMeetLink) {
+            window.open(session.googleMeetLink, '_blank');
+            return;
+        }
+
+        toast({
+            title: 'Creating Google Meet link...',
+            description: 'Please wait a moment.',
+        });
+
+        try {
+            const input: CreateSessionInput = {
+                teacher: { name: session.teacher.name, email: session.teacher.email },
+                learner: { name: session.learner.name, email: session.learner.email },
+                skill: session.skill,
+                sessionDate: session.sessionDate.toISOString(),
+                duration: session.duration,
+            };
+            const result = await createSession(input);
+
+            if (result.success && result.meetLink) {
+                session.googleMeetLink = result.meetLink; // Update session object for immediate use
+                toast({
+                    title: 'Meet link created!',
+                    description: 'Redirecting you to the meeting.',
+                });
+                window.open(result.meetLink, '_blank');
+            } else {
+                throw new Error(result.message || 'Failed to create Meet link.');
+            }
+        } catch (error: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error.message || 'Could not create the Google Meet link.',
+            });
+        }
+    };
+
 
     return (
         <Card>
@@ -51,7 +97,7 @@ const SessionCard = ({ session }: { session: Session }) => {
                     {session.duration} hr session
                 </div>
                 {session.status === 'scheduled' && (
-                    <Button>
+                    <Button onClick={handleJoinNow}>
                         <Video className="mr-2 h-4 w-4" /> Join Now
                     </Button>
                 )}

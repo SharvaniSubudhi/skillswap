@@ -29,7 +29,7 @@ export type Session = {
   skill: string;
   duration: number; // in hours
   creditsTransferred: number;
-  googleMeetLink: string;
+  googleMeetLink?: string;
   status: 'scheduled' | 'completed' | 'cancelled';
   feedback?: string;
   rating?: number;
