@@ -1,6 +1,6 @@
+
 "use client";
 
-import { users } from "@/lib/data"
 import type { User } from "@/lib/types"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Star, ArrowRight } from "lucide-react"
-import { useFirebase } from "@/firebase";
+import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
 import React from "react";
+import { collection, query, where, documentId } from "firebase/firestore";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const getInitials = (name: string) => {
     const names = name.split(' ')
@@ -31,7 +33,7 @@ function UserCard({ user }: { user: User }) {
           <CardTitle className="font-headline text-xl">{user.name}</CardTitle>
           <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
             <Star className="w-4 h-4 fill-yellow-400 text-yellow-500" />
-            <span>{user.rating.toFixed(1)}</span>
+            <span>{user.rating?.toFixed(1) || 'N/A'}</span>
             <span className="mx-1">•</span>
             <span>{user.status === 'online' ? 'Online' : 'Offline'}</span>
           </div>
@@ -40,9 +42,10 @@ function UserCard({ user }: { user: User }) {
       <CardContent className="flex-grow">
         <CardDescription>Teaches:</CardDescription>
         <div className="mt-2 flex flex-wrap gap-2">
-          {user.skillsKnown.slice(0, 3).map((skill) => (
+          {user.skillsKnown?.slice(0, 3).map((skill) => (
             <Badge key={skill.skillName} variant="secondary">{skill.skillName}</Badge>
           ))}
+           {user.skillsKnown?.length === 0 && <p className="text-xs text-muted-foreground">No skills to teach yet.</p>}
         </div>
       </CardContent>
       <CardFooter>
@@ -56,23 +59,62 @@ function UserCard({ user }: { user: User }) {
   )
 }
 
+function UserCardSkeleton() {
+    return (
+      <Card className="flex flex-col h-full">
+        <CardHeader className="flex-row gap-4 items-center">
+          <Skeleton className="w-14 h-14 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+        </CardHeader>
+        <CardContent className="flex-grow">
+          <Skeleton className="h-4 w-20 mb-2" />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Skeleton className="h-6 w-16" />
+            <Skeleton className="h-6 w-20" />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Skeleton className="h-10 w-full" />
+        </CardFooter>
+      </Card>
+    );
+  }
+
 export default function DashboardPage() {
-  const { user: authUser } = useFirebase();
-  
-  // In a real app, this would come from the AI recommendation engine
-  const recommendedUsers = authUser ? users.filter(u => u.id !== authUser.uid) : users;
+  const { user: authUser, firestore } = useFirebase();
+
+  const usersQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, "users");
+  }, [firestore]);
+
+  const { data: users, isLoading } = useCollection<User>(usersQuery);
+
+  const recommendedUsers = React.useMemo(() => {
+    if (!users || !authUser) return [];
+    return users.filter(u => u.id !== authUser.uid);
+  }, [users, authUser]);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold font-headline">Discover Matches</h1>
-        <p className="text-muted-foreground">AI-powered recommendations to help you find the perfect peer.</p>
+        <p className="text-muted-foreground">Find peers from your university to learn from and teach.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {recommendedUsers.map((user) => (
+        {isLoading && (
+            Array.from({ length: 4 }).map((_, i) => <UserCardSkeleton key={i} />)
+        )}
+        {!isLoading && recommendedUsers.map((user) => (
           <UserCard key={user.id} user={user} />
         ))}
+         {!isLoading && recommendedUsers.length === 0 && (
+            <p className="text-center text-muted-foreground py-12 col-span-full">No other users found.</p>
+        )}
       </div>
     </div>
   )
