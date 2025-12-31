@@ -1,3 +1,4 @@
+
 export type Skill = {
   skillName: string;
   level: 'basic' | 'intermediate' | 'advanced';
@@ -20,6 +21,7 @@ export type User = {
   badges: string[]; // e.g., ["Top Mentor", "Fast Learner"]
   status: 'online' | 'offline';
   avatarUrl: string;
+  studentIdProof?: string;
 };
 
 export type Session = {
@@ -36,3 +38,13 @@ export type Session = {
   disputeRaised: boolean;
   sessionDate: Date;
 };
+
+export type Dispute = {
+    id: string;
+    sessionId: string;
+    raisedBy: string; // user id
+    reason: string;
+    status: 'open' | 'resolved' | 'rejected';
+    resolution?: string;
+    createdAt: Date;
+}

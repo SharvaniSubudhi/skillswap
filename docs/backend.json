@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -54,6 +55,39 @@
         "status": { "type": "string", "enum": ["online", "offline"] }
       },
       "required": ["id", "name", "email"]
+    },
+    "Session": {
+        "title": "Session",
+        "type": "object",
+        "description": "Represents a tutoring session between two users.",
+        "properties": {
+            "teacherId": { "type": "string" },
+            "learnerId": { "type": "string" },
+            "skill": { "type": "string" },
+            "duration": { "type": "number" },
+            "creditsTransferred": { "type": "number" },
+            "googleMeetLink": { "type": "string", "format": "uri" },
+            "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled", "requested"] },
+            "feedback": { "type": "string" },
+            "rating": { "type": "number" },
+            "disputeRaised": { "type": "boolean" },
+            "sessionDate": { "type": "string", "format": "date-time" }
+        },
+        "required": ["teacherId", "learnerId", "skill", "duration", "creditsTransferred", "status", "sessionDate"]
+    },
+    "Dispute": {
+        "title": "Dispute",
+        "type": "object",
+        "description": "Represents a dispute raised for a session.",
+        "properties": {
+            "sessionId": { "type": "string" },
+            "raisedBy": { "type": "string" },
+            "reason": { "type": "string" },
+            "status": { "type": "string", "enum": ["open", "resolved", "rejected"] },
+            "resolution": { "type": "string" },
+            "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["sessionId", "raisedBy", "reason", "status", "createdAt"]
     }
   },
   "auth": {
@@ -63,6 +97,14 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "Stores individual user profiles."
+    },
+    "/sessions/{sessionId}": {
+        "schema": { "$ref": "#/entities/Session" },
+        "description": "Stores session details."
+    },
+    "/disputes/{disputeId}": {
+        "schema": { "$ref": "#/entities/Dispute" },
+        "description": "Stores dispute details for sessions."
     }
   }
 }
