@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -65,7 +66,7 @@ export default function SignupPage() {
         skillsKnown: [],
         skillsWanted: [],
         availability: [],
-        credits: 0,
+        credits: 3,
         rating: 0,
         badges: [],
         status: 'online',
