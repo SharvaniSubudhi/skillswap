@@ -7,7 +7,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { google } from 'googleapis';
 
 // Define schemas for tool inputs
@@ -138,7 +138,7 @@ export type CreateSessionOutput = z.infer<typeof CreateSessionOutputSchema>;
 
 
 // Define the main flow
-export const createSession = ai.defineFlow(
+const createSessionFlow = ai.defineFlow(
   {
     name: 'createSessionFlow',
     inputSchema: CreateSessionInputSchema,
@@ -191,3 +191,7 @@ export const createSession = ai.defineFlow(
     };
   }
 );
+
+export async function createSession(input: CreateSessionInput): Promise<CreateSessionOutput> {
+    return createSessionFlow(input);
+}

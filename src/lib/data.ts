@@ -134,6 +134,17 @@ export const currentUser = users[1]; // Let's assume Rohan Verma is the logged i
 
 export const sessions: Session[] = [
     {
+        id: 's0',
+        teacher: users[0], // Anika
+        learner: users[4], // Sameer
+        skill: 'Python',
+        duration: 1,
+        creditsTransferred: 1,
+        status: 'requested',
+        sessionDate: new Date("2024-08-26T18:00:00.000Z"),
+        disputeRaised: false,
+    },
+    {
         id: 's1',
         teacher: users[0],
         learner: currentUser,
@@ -142,7 +153,7 @@ export const sessions: Session[] = [
         creditsTransferred: 1,
         googleMeetLink: '#',
         status: 'scheduled',
-        sessionDate: new Date('2024-08-15T10:00:00Z'),
+        sessionDate: new Date("2024-08-15T10:00:00.000Z"),
         disputeRaised: false,
     },
     {
@@ -154,7 +165,7 @@ export const sessions: Session[] = [
         creditsTransferred: 2,
         googleMeetLink: '#',
         status: 'completed',
-        sessionDate: new Date('2024-08-07T14:00:00Z'),
+        sessionDate: new Date("2024-08-07T14:00:00.000Z"),
         feedback: 'Rohan is an amazing teacher! Explained React concepts very clearly.',
         rating: 5,
         disputeRaised: false,
@@ -168,7 +179,7 @@ export const sessions: Session[] = [
         creditsTransferred: 1,
         googleMeetLink: '#',
         status: 'cancelled',
-        sessionDate: new Date('2024-08-10T11:00:00Z'),
+        sessionDate: new Date("2024-08-10T11:00:00.000Z"),
         disputeRaised: false,
     },
     {
@@ -180,7 +191,7 @@ export const sessions: Session[] = [
         creditsTransferred: 1,
         googleMeetLink: '#',
         status: 'completed',
-        sessionDate: new Date('2024-08-02T16:00:00Z'),
+        sessionDate: new Date("2024-08-02T16:00:00.000Z"),
         feedback: 'Great session on Node.js fundamentals.',
         rating: 4,
         disputeRaised: false,

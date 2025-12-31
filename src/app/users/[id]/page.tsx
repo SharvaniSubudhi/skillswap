@@ -1,5 +1,8 @@
-import { users, sessions } from "@/lib/data";
+"use client";
+
+import { users, sessions, currentUser } from "@/lib/data";
 import { notFound } from "next/navigation";
+import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -7,11 +10,120 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Gem, Star, Award, Verified, Calendar, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { requestSession } from "@/ai/flows/request-session";
+import type { RequestSessionInput } from "@/ai/flows/request-session";
+
 
 const getInitials = (name: string) => {
     const names = name.split(' ');
     return names.length > 1 ? `${names[0][0]}${names[names.length - 1][0]}` : name.substring(0, 2);
 };
+
+function BookSessionDialog({ user, children }: { user: typeof users[0], children: React.ReactNode }) {
+    const [isOpen, setIsOpen] = React.useState(false);
+    const [selectedSkill, setSelectedSkill] = React.useState('');
+    const [selectedSlot, setSelectedSlot] = React.useState('');
+    const [isLoading, setIsLoading] = React.useState(false);
+    const { toast } = useToast();
+
+    const handleBooking = async () => {
+        if (!selectedSkill || !selectedSlot) {
+            toast({
+                variant: "destructive",
+                title: "Missing Information",
+                description: "Please select a skill and a time slot.",
+            });
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const input: RequestSessionInput = {
+                teacher: { name: user.name, email: user.email },
+                learner: { name: currentUser.name, email: currentUser.email },
+                skill: selectedSkill,
+                sessionDetails: selectedSlot,
+            };
+
+            const result = await requestSession(input);
+            if (result.success) {
+                toast({
+                    title: "Request Sent!",
+                    description: result.message,
+                });
+                // In a real app, you would update the state to show the new 'requested' session.
+                setIsOpen(false);
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error: any) {
+             toast({
+                variant: "destructive",
+                title: "Booking Failed",
+                description: error.message || "There was a problem requesting the session.",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <div onClick={() => setIsOpen(true)}>{children}</div>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Book a session with {user.name}</DialogTitle>
+                    <DialogDescription>
+                        Select a skill you want to learn and a time that works for you.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                     <div className="space-y-2">
+                        <Label htmlFor="skill">Skill to Learn</Label>
+                        <Select onValueChange={setSelectedSkill} defaultValue={selectedSkill}>
+                            <SelectTrigger id="skill">
+                                <SelectValue placeholder="Select a skill..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {user.skillsKnown.map(skill => (
+                                    <SelectItem key={skill.skillName} value={skill.skillName}>{skill.skillName}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="availability">Available Slots</Label>
+                         <Select onValueChange={setSelectedSlot} defaultValue={selectedSlot}>
+                            <SelectTrigger id="availability">
+                                <SelectValue placeholder="Select a time slot..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {user.availability.map(slot => (
+                                    <SelectItem key={`${slot.day}-${slot.timeSlot}`} value={`${slot.day} at ${slot.timeSlot}`}>
+                                        {slot.day} - {slot.timeSlot}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={handleBooking} disabled={isLoading}>
+                        {isLoading ? "Sending Request..." : "Send Request"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
     const user = users.find(u => u.id === params.id);
@@ -46,7 +158,9 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                                 </Badge>
                             ))}
                         </div>
-                        <Button className="mt-6 w-full">Book Session</Button>
+                         <BookSessionDialog user={user}>
+                            <Button className="mt-6 w-full">Book Session</Button>
+                        </BookSessionDialog>
                     </CardContent>
                 </Card>
 
