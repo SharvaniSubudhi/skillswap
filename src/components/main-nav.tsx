@@ -8,10 +8,12 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 export function MainNav() {
   const pathname = usePathname()
+  const { isCollapsed } = useSidebar();
 
   const menuItems = [
     {
@@ -42,13 +44,12 @@ export function MainNav() {
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
-            variant="ghost"
             isActive={pathname === item.href}
             tooltip={item.label}
           >
             <Link href={item.href}>
               <item.icon />
-              <span>{item.label}</span>
+              {!isCollapsed && <span>{item.label}</span>}
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>

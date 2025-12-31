@@ -5,7 +5,7 @@ import {
   SidebarContent,
   SidebarInset,
   SidebarFooter,
-  SidebarSeparator,
+  SidebarCollapse,
 } from "@/components/ui/sidebar"
 import { Header } from "@/components/header"
 import { MainNav } from "@/components/main-nav"
@@ -21,10 +21,13 @@ export default function DashboardLayout({
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader>
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <Logo />
-            <span className="font-bold text-lg font-headline">SkillSwap</span>
-          </Link>
+          <div className="flex items-center justify-between w-full">
+            <Link href="/dashboard" className="flex items-center gap-2 flex-grow overflow-hidden">
+              <Logo />
+              <span className="font-bold text-lg font-headline truncate">SkillSwap</span>
+            </Link>
+            <SidebarCollapse />
+          </div>
         </SidebarHeader>
         <SidebarContent>
           <MainNav />
