@@ -2,6 +2,7 @@
 export type Skill = {
   skillName: string;
   level: 'basic' | 'intermediate' | 'advanced';
+  isVerified?: boolean;
 };
 
 export type Availability = {

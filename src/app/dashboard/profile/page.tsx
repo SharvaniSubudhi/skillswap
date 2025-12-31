@@ -14,20 +14,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Gem, Upload, Star, Award, Verified, X, CalendarPlus, Paperclip } from "lucide-react";
+import { Gem, Upload, Star, Award, Verified, X, CalendarPlus, Paperclip, CheckCircle, BookOpen } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
+import { generateSkillQuiz, type GenerateSkillQuizOutput } from "@/ai/flows/skill-verification-quiz";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
+
+const skillKnownSchema = z.object({
+    skillName: z.string().min(1, "Skill name is required"),
+    level: z.enum(["basic", "intermediate", "advanced"]),
+    isVerified: z.boolean().optional(),
+});
 
 const profileSchema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email(),
-    skillsKnown: z.array(z.object({
-        skillName: z.string().min(1, "Skill name is required"),
-        level: z.enum(["basic", "intermediate", "advanced"]),
-    })),
+    skillsKnown: z.array(skillKnownSchema),
     skillsWanted: z.array(z.object({
         skillName: z.string().min(1, "Skill name is required"),
     })),
@@ -60,6 +65,9 @@ export default function ProfilePage() {
     const [newAvailabilityTime, setNewAvailabilityTime] = React.useState("");
     const [studentIdFile, setStudentIdFile] = React.useState<File | null>(null);
 
+    const [isVerifying, setIsVerifying] = React.useState(false);
+    const [quiz, setQuiz] = React.useState<GenerateSkillQuizOutput & { skillName: string } | null>(null);
+
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
         defaultValues: {
@@ -72,7 +80,7 @@ export default function ProfilePage() {
         },
     });
 
-    const { fields: skillsKnownFields, append: appendSkillKnown, remove: removeSkillKnown } = useFieldArray({
+    const { fields: skillsKnownFields, append: appendSkillKnown, remove: removeSkillKnown, update: updateSkillKnown } = useFieldArray({
         control: form.control,
         name: "skillsKnown",
     });
@@ -116,6 +124,43 @@ export default function ProfilePage() {
         }
     };
 
+    const handleVerifySkill = async (skillName: string) => {
+        setIsVerifying(true);
+        setQuiz(null);
+        try {
+            const result = await generateSkillQuiz({ skillName });
+            setQuiz({ ...result, skillName });
+        } catch (error) {
+            console.error("Error generating skill quiz:", error);
+            toast({
+                variant: "destructive",
+                title: "Verification Failed",
+                description: "Could not generate the skill quiz. Please try again.",
+            });
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
+    const handleMarkAssessmentComplete = () => {
+        if (!quiz) return;
+        
+        const skillIndex = skillsKnownFields.findIndex(field => field.skillName === quiz.skillName);
+        if (skillIndex !== -1) {
+            const skill = skillsKnownFields[skillIndex];
+            updateSkillKnown(skillIndex, { ...skill, isVerified: true });
+            
+            toast({
+                title: "Skill Verified!",
+                description: `You are now a verified teacher for ${quiz.skillName}.`,
+            });
+        }
+        
+        setQuiz(null);
+        // We still need to save the change
+        form.handleSubmit(onSubmit)();
+    };
+
     const onSubmit = (data: ProfileFormValues) => {
         if (!user || !firestore) return;
 
@@ -126,8 +171,6 @@ export default function ProfilePage() {
             ...data
         };
 
-        // In a real app, you would upload the file to Firebase Storage first
-        // and then save the URL. For now, we just save the file name.
         if (studentIdFile) {
             profileData.studentIdProof = studentIdFile.name;
         }
@@ -177,9 +220,10 @@ export default function ProfilePage() {
 
                 <Card className="flex-1">
                      <Tabs defaultValue="account">
-                        <TabsList className="grid w-full grid-cols-3">
+                        <TabsList className="grid w-full grid-cols-4">
                             <TabsTrigger value="account">Account</TabsTrigger>
                             <TabsTrigger value="skills">Skills</TabsTrigger>
+                            <TabsTrigger value="verification">Verification</TabsTrigger>
                             <TabsTrigger value="availability">Availability</TabsTrigger>
                         </TabsList>
                         <TabsContent value="account" className="p-6">
@@ -198,7 +242,6 @@ export default function ProfilePage() {
                                         <Label htmlFor="email">Email</Label>
                                         <Input id="email" {...form.register("email")} disabled />
                                     </div>
-                                    <Button type="submit">Save Changes</Button>
                                 </div>
                                 <div className="space-y-4 pt-6 border-t">
                                   <h3 className="text-lg font-medium font-headline">Student Verification</h3>
@@ -228,6 +271,9 @@ export default function ProfilePage() {
                                       </CardContent>
                                    </Card>
                                 </div>
+                                <div className="pt-6">
+                                     <Button type="submit">Save All Changes</Button>
+                                </div>
                             </div>
                         </TabsContent>
                         <TabsContent value="skills" className="p-6">
@@ -239,7 +285,11 @@ export default function ProfilePage() {
                                         {skillsKnownFields.map((field, index) => (
                                             <div key={field.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                                                 <div className="flex items-center gap-2">
-                                                    <Verified className="w-4 h-4 text-green-500" />
+                                                     {field.isVerified ? (
+                                                        <CheckCircle className="w-4 h-4 text-green-500" />
+                                                    ) : (
+                                                        <Verified className="w-4 h-4 text-muted-foreground" />
+                                                    )}
                                                     <span className="font-medium">{form.watch(`skillsKnown.${index}.skillName`)}</span>
                                                     <Badge variant="outline" className="capitalize">{form.watch(`skillsKnown.${index}.level`)}</Badge>
                                                 </div>
@@ -268,7 +318,7 @@ export default function ProfilePage() {
                                         </Select>
                                         <Button type="button" onClick={() => {
                                             if (newSkillName) {
-                                                appendSkillKnown({ skillName: newSkillName, level: newSkillLevel });
+                                                appendSkillKnown({ skillName: newSkillName, level: newSkillLevel, isVerified: false });
                                                 setNewSkillName('');
                                                 setNewSkillLevel('basic');
                                             }
@@ -301,6 +351,74 @@ export default function ProfilePage() {
                                     </div>
                                 </div>
                              </div>
+                        </TabsContent>
+                        <TabsContent value="verification" className="p-6">
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-lg font-medium font-headline">Skill Verification</h3>
+                                    <p className="text-sm text-muted-foreground">Take a short, AI-generated quiz to get a "Verified" badge for your skills.</p>
+                                </div>
+                                <div className="space-y-4">
+                                    {skillsKnownFields.map((skill, index) => (
+                                        <Card key={skill.id} className="p-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    {skill.isVerified ? (
+                                                        <CheckCircle className="w-5 h-5 text-green-500" />
+                                                    ) : (
+                                                        <Verified className="w-5 h-5 text-muted-foreground" />
+                                                    )}
+                                                    <div>
+                                                        <p className="font-semibold">{skill.skillName}</p>
+                                                        <p className="text-xs text-muted-foreground capitalize">{skill.level}</p>
+                                                    </div>
+                                                </div>
+                                                {skill.isVerified ? (
+                                                    <Badge variant="secondary" className="border-green-500/50 text-green-600">Verified</Badge>
+                                                ) : (
+                                                    <Button size="sm" onClick={() => handleVerifySkill(skill.skillName)} disabled={isVerifying}>
+                                                        {isVerifying ? 'Generating...' : 'Get Verified'}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </Card>
+                                    ))}
+                                    {skillsKnownFields.length === 0 && (
+                                        <p className="text-center text-muted-foreground py-8">Add a skill you know to get started.</p>
+                                    )}
+                                </div>
+
+                                {isVerifying && <p className="text-center text-muted-foreground animate-pulse">Gemini is preparing your test...</p>}
+
+                                {quiz && (
+                                    <Card className="mt-6 bg-primary/5 p-6">
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <BookOpen className="w-5 h-5 text-primary"/>
+                                                Self-Assessment: {quiz.skillName}
+                                            </CardTitle>
+                                            <CardDescription>Review the questions and your conceptual answers. This is a trust-based verification.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {quiz.questions.map((q, i) => (
+                                                <Alert key={i}>
+                                                    <AlertTitle>{i + 1}. {q.question}</AlertTitle>
+                                                    <AlertDescription className="mt-2 text-xs italic">
+                                                        <strong>Expected Answer Focus:</strong> {q.answer}
+                                                    </AlertDescription>
+                                                </Alert>
+                                            ))}
+                                        </CardContent>
+                                        <CardFooter className="flex-col gap-2">
+                                             <Button onClick={handleMarkAssessmentComplete} className="w-full">
+                                                Mark Assessment as Complete & Get Verified
+                                            </Button>
+                                             <p className="text-xs text-muted-foreground">This is a trust-based system for the MVP.</p>
+                                        </CardFooter>
+                                    </Card>
+                                )}
+
+                            </div>
                         </TabsContent>
                         <TabsContent value="availability" className="p-6">
                             <div className="space-y-6">
@@ -354,10 +472,4 @@ export default function ProfilePage() {
             </div>
         </form>
     );
-
-    
 }
-
-    
-
-    
