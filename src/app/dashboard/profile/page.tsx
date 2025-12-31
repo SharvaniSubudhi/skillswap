@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Gem, Upload, Star, Award, Verified, X } from "lucide-react";
+import { Gem, Upload, Star, Award, Verified, X, CalendarPlus } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,8 +32,8 @@ const profileSchema = z.object({
         skillName: z.string().min(1, "Skill name is required"),
     })),
     availability: z.array(z.object({
-        day: z.string(),
-        timeSlot: z.string(),
+        day: z.string().min(1, "Day is required"),
+        timeSlot: z.string().min(1, "Time slot is required"),
     })),
     studentIdProof: z.string().optional(),
 });
@@ -46,6 +46,8 @@ const getInitials = (name: string = "") => {
     return names.length > 1 ? `${names[0][0]}${names[names.length - 1][0]}` : name.substring(0, 2);
 };
 
+const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 export default function ProfilePage() {
     const { user, firestore } = useFirebase();
     const { toast } = useToast();
@@ -54,6 +56,8 @@ export default function ProfilePage() {
     const [newSkillName, setNewSkillName] = React.useState("");
     const [newSkillLevel, setNewSkillLevel] = React.useState<SkillLevel>("basic");
     const [newWantedSkill, setNewWantedSkill] = React.useState("");
+    const [newAvailabilityDay, setNewAvailabilityDay] = React.useState("");
+    const [newAvailabilityTime, setNewAvailabilityTime] = React.useState("");
 
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
@@ -74,6 +78,11 @@ export default function ProfilePage() {
     const { fields: skillsWantedFields, append: appendSkillWanted, remove: removeSkillWanted } = useFieldArray({
         control: form.control,
         name: "skillsWanted",
+    });
+
+    const { fields: availabilityFields, append: appendAvailability, remove: removeAvailability } = useFieldArray({
+        control: form.control,
+        name: "availability",
     });
 
     React.useEffect(() => {
@@ -267,9 +276,50 @@ export default function ProfilePage() {
                              </div>
                         </TabsContent>
                         <TabsContent value="availability" className="p-6">
-                            <div>
-                                <h3 className="text-lg font-medium font-headline">Your Availability</h3>
-                                <p className="text-sm text-muted-foreground">Set your weekly schedule so others can book sessions with you.</p>
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-lg font-medium font-headline">Your Availability</h3>
+                                    <p className="text-sm text-muted-foreground">Set your weekly schedule so others can book sessions with you.</p>
+                                </div>
+                                <div className="mt-4 space-y-3">
+                                    {availabilityFields.map((field, index) => (
+                                        <div key={field.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                                <CalendarPlus className="w-4 h-4 text-muted-foreground" />
+                                                <span className="font-medium">{form.watch(`availability.${index}.day`)}</span>
+                                                <span className="text-muted-foreground">{form.watch(`availability.${index}.timeSlot`)}</span>
+                                            </div>
+                                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeAvailability(index)}><X className="h-4 w-4"/></Button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-4 flex gap-2">
+                                    <Select value={newAvailabilityDay} onValueChange={setNewAvailabilityDay}>
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Select a day" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {daysOfWeek.map(day => <SelectItem key={day} value={day}>{day}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Input 
+                                        placeholder="e.g. 18:00 - 20:00"
+                                        value={newAvailabilityTime}
+                                        onChange={(e) => setNewAvailabilityTime(e.target.value)}
+                                    />
+                                    <Button type="button" onClick={() => {
+                                        if (newAvailabilityDay && newAvailabilityTime) {
+                                            appendAvailability({ day: newAvailabilityDay, timeSlot: newAvailabilityTime });
+                                            setNewAvailabilityDay('');
+                                            setNewAvailabilityTime('');
+                                        }
+                                    }}>Add Slot</Button>
+                                </div>
+
+                                <div className="pt-6">
+                                     <Button type="submit">Save Availability</Button>
+                                </div>
                             </div>
                         </TabsContent>
                     </Tabs>
@@ -277,5 +327,8 @@ export default function ProfilePage() {
             </div>
         </form>
     );
+
+    
+}
 
     
