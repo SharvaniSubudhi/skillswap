@@ -235,7 +235,7 @@ const SidebarMenuButton = React.forwardRef<
       )}
       {...props}
     >
-      {isCollapsed ? children : <div className="flex w-full items-center justify-start gap-2">{children}</div>}
+      {children}
     </Button>
   )
 
