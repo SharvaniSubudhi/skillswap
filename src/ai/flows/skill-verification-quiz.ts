@@ -19,12 +19,12 @@ const QuestionSchema = z.object({
     .describe('A brief description of the correct answer or key concepts to look for.'),
 });
 
-export const GenerateSkillQuizInputSchema = z.object({
+const GenerateSkillQuizInputSchema = z.object({
   skillName: z.string().describe('The skill to be verified, e.g., "React" or "Python".'),
 });
 export type GenerateSkillQuizInput = z.infer<typeof GenerateSkillQuizInputSchema>;
 
-export const GenerateSkillQuizOutputSchema = z.object({
+const GenerateSkillQuizOutputSchema = z.object({
   questions: z.array(QuestionSchema).describe('An array of 3 quiz questions.'),
 });
 export type GenerateSkillQuizOutput = z.infer<typeof GenerateSkillQuizOutputSchema>;
