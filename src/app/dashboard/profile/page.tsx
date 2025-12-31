@@ -6,7 +6,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useFirebase } from "@/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Gem, Upload, Star, Award, Verified, X, CalendarPlus } from "lucide-react";
+import { Gem, Upload, Star, Award, Verified, X, CalendarPlus, Paperclip } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -58,6 +58,7 @@ export default function ProfilePage() {
     const [newWantedSkill, setNewWantedSkill] = React.useState("");
     const [newAvailabilityDay, setNewAvailabilityDay] = React.useState("");
     const [newAvailabilityTime, setNewAvailabilityTime] = React.useState("");
+    const [studentIdFile, setStudentIdFile] = React.useState<File | null>(null);
 
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
@@ -67,6 +68,7 @@ export default function ProfilePage() {
             skillsKnown: [],
             skillsWanted: [],
             availability: [],
+            studentIdProof: "",
         },
     });
 
@@ -98,12 +100,21 @@ export default function ProfilePage() {
                         skillsKnown: data.skillsKnown || [],
                         skillsWanted: data.skillsWanted || [],
                         availability: data.availability || [],
+                        studentIdProof: data.studentIdProof || "",
                     });
                 }
                 setIsLoading(false);
             });
         }
     }, [user, firestore, form]);
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setStudentIdFile(file);
+            form.setValue("studentIdProof", file.name);
+        }
+    };
 
     const onSubmit = (data: ProfileFormValues) => {
         if (!user || !firestore) return;
@@ -114,6 +125,12 @@ export default function ProfilePage() {
             ...userProfile,
             ...data
         };
+
+        // In a real app, you would upload the file to Firebase Storage first
+        // and then save the URL. For now, we just save the file name.
+        if (studentIdFile) {
+            profileData.studentIdProof = studentIdFile.name;
+        }
 
         setDocumentNonBlocking(userDocRef, profileData, { merge: true });
 
@@ -188,16 +205,26 @@ export default function ProfilePage() {
                                    <p className="text-sm text-muted-foreground">Upload your student ID for fraud prevention.</p>
                                    <Card className="bg-secondary/50">
                                       <CardContent className="pt-6">
-                                        <div className="flex items-center gap-4 p-4 rounded-lg border-dashed border-2">
-                                           <Upload className="h-8 w-8 text-muted-foreground"/>
-                                           <div>
-                                             <Label htmlFor="student-id" className="cursor-pointer text-primary font-semibold">
-                                               Click to upload a file
-                                               <Input id="student-id" type="file" className="sr-only"/>
-                                             </Label>
-                                             <p className="text-xs text-muted-foreground">PNG, JPG, PDF up to 5MB</p>
-                                           </div>
-                                        </div>
+                                        {form.watch("studentIdProof") && !studentIdFile ? (
+                                             <div className="flex items-center justify-between p-4 rounded-lg border">
+                                                <div className="flex items-center gap-2">
+                                                    <Paperclip className="h-5 w-5 text-muted-foreground"/>
+                                                    <span className="text-sm font-medium">{form.watch("studentIdProof")}</span>
+                                                </div>
+                                                <Button variant="ghost" size="sm" onClick={() => form.setValue("studentIdProof", "")}>Change</Button>
+                                             </div>
+                                        ) : (
+                                            <div className="flex items-center gap-4 p-4 rounded-lg border-dashed border-2">
+                                               <Upload className="h-8 w-8 text-muted-foreground"/>
+                                               <div>
+                                                 <Label htmlFor="student-id" className="cursor-pointer text-primary font-semibold">
+                                                   {studentIdFile ? "File selected: " + studentIdFile.name : "Click to upload a file"}
+                                                   <Input id="student-id" type="file" className="sr-only" onChange={handleFileChange} accept="image/png, image/jpeg, application/pdf"/>
+                                                 </Label>
+                                                 <p className="text-xs text-muted-foreground">PNG, JPG, PDF up to 5MB</p>
+                                               </div>
+                                            </div>
+                                        )}
                                       </CardContent>
                                    </Card>
                                 </div>
@@ -330,5 +357,3 @@ export default function ProfilePage() {
 
     
 }
-
-    
