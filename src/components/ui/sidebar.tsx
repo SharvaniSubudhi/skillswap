@@ -179,9 +179,6 @@ const SidebarCollapse = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {isCollapsed ? <Menu /> : <X />}
-        <span className="sr-only">
-          {isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        </span>
       </Button>
     )
   }
