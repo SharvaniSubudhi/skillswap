@@ -1,7 +1,7 @@
 
 "use client";
 
-import { users, sessions, currentUser } from "@/lib/data";
+import { sessions } from "@/lib/data";
 import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { requestSession } from "@/ai/flows/request-session";
 import type { User } from "@/lib/types";
+import { useFirebase } from "@/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 type RequestSessionInput = {
     teacher: { name: string, email: string };
@@ -30,7 +32,7 @@ const getInitials = (name: string) => {
     return names.length > 1 ? `${names[0][0]}${names[names.length - 1][0]}` : name.substring(0, 2);
 };
 
-function BookSessionDialog({ user, children }: { user: User, children: React.ReactNode }) {
+function BookSessionDialog({ user, currentUser, children }: { user: User, currentUser: User | null, children: React.ReactNode }) {
     const [isOpen, setIsOpen] = React.useState(false);
     const [selectedSkill, setSelectedSkill] = React.useState('');
     const [selectedSlot, setSelectedSlot] = React.useState('');
@@ -43,6 +45,15 @@ function BookSessionDialog({ user, children }: { user: User, children: React.Rea
                 variant: "destructive",
                 title: "Missing Information",
                 description: "Please select a skill and a time slot.",
+            });
+            return;
+        }
+
+        if (!currentUser) {
+             toast({
+                variant: "destructive",
+                title: "Not Authenticated",
+                description: "You must be logged in to book a session.",
             });
             return;
         }
@@ -132,8 +143,23 @@ function BookSessionDialog({ user, children }: { user: User, children: React.Rea
 }
 
 
-export function UserProfileClient({ user }: { user: User }) {
-    const userSessionsAsTeacher = sessions.filter(s => s.teacher.id === user.id && s.status === 'completed' && s.feedback);
+export function UserProfileClient({ user: initialUser }: { user: User }) {
+    const { user: authUser, firestore } = useFirebase();
+    const [currentUser, setCurrentUser] = React.useState<User | null>(null);
+
+    const userSessionsAsTeacher = sessions.filter(s => s.teacher.id === initialUser.id && s.status === 'completed' && s.feedback);
+
+    React.useEffect(() => {
+        if(authUser && firestore) {
+            const userDocRef = doc(firestore, "users", authUser.uid);
+            getDoc(userDocRef).then(docSnap => {
+                if(docSnap.exists()){
+                    setCurrentUser(docSnap.data() as User)
+                }
+            })
+        }
+    }, [authUser, firestore])
+
 
     return (
         <div className="space-y-6">
@@ -141,26 +167,26 @@ export function UserProfileClient({ user }: { user: User }) {
                 <Card className="w-full md:w-1/3 lg:w-1/4">
                     <CardContent className="pt-6 flex flex-col items-center text-center">
                         <Avatar className="w-24 h-24 mb-4">
-                            <AvatarImage src={user.avatarUrl} alt={user.name} />
-                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                            <AvatarImage src={initialUser.avatarUrl} alt={initialUser.name} />
+                            <AvatarFallback>{getInitials(initialUser.name)}</AvatarFallback>
                         </Avatar>
-                        <h2 className="text-2xl font-bold font-headline">{user.name}</h2>
+                        <h2 className="text-2xl font-bold font-headline">{initialUser.name}</h2>
                         <div className="mt-2 flex items-center gap-4">
                             <div className="flex items-center gap-1">
                                 <Star className="w-4 h-4 text-yellow-500 fill-yellow-400" />
-                                <span className="font-semibold">{user.rating}</span>
+                                <span className="font-semibold">{initialUser.rating}</span>
                             </div>
-                            <div className={`w-2.5 h-2.5 rounded-full ${user.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                            <span className="text-sm text-muted-foreground capitalize">{user.status}</span>
+                            <div className={`w-2.5 h-2.5 rounded-full ${initialUser.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                            <span className="text-sm text-muted-foreground capitalize">{initialUser.status}</span>
                         </div>
                         <div className="mt-4 flex flex-wrap justify-center gap-2">
-                            {user.badges.map(badge => (
+                            {initialUser.badges.map(badge => (
                                 <Badge key={badge} variant="secondary" className="gap-1">
                                     <Award className="w-3 h-3"/> {badge}
                                 </Badge>
                             ))}
                         </div>
-                         <BookSessionDialog user={user}>
+                         <BookSessionDialog user={initialUser} currentUser={currentUser}>
                             <Button className="mt-6 w-full">Book Session</Button>
                         </BookSessionDialog>
                     </CardContent>
@@ -178,7 +204,7 @@ export function UserProfileClient({ user }: { user: User }) {
                                 <div>
                                     <h3 className="text-lg font-medium font-headline">Skills to Teach</h3>
                                     <div className="mt-4 space-y-3">
-                                        {user.skillsKnown.map(skill => (
+                                        {initialUser.skillsKnown.map(skill => (
                                             <div key={skill.skillName} className="flex items-center gap-2 p-3 bg-secondary rounded-lg">
                                                 <Verified className="w-4 h-4 text-green-500" />
                                                 <span className="font-medium">{skill.skillName}</span>
@@ -190,7 +216,7 @@ export function UserProfileClient({ user }: { user: User }) {
                                 <div className="pt-6 border-t">
                                     <h3 className="text-lg font-medium font-headline">Skills to Learn</h3>
                                      <div className="mt-4 space-y-3">
-                                        {user.skillsWanted.map(skill => (
+                                        {initialUser.skillsWanted.map(skill => (
                                             <div key={skill.skillName} className="flex items-center p-3 bg-secondary rounded-lg">
                                                <span className="font-medium">{skill.skillName}</span>
                                             </div>
@@ -204,7 +230,7 @@ export function UserProfileClient({ user }: { user: User }) {
                                 <h3 className="text-lg font-medium font-headline flex items-center gap-2"><Calendar/> Weekly Availability</h3>
                                 <p className="text-sm text-muted-foreground">Available time slots for booking.</p>
                                 <div className="mt-4 space-y-3">
-                                    {user.availability.map(slot => (
+                                    {initialUser.availability.map(slot => (
                                         <div key={`${slot.day}-${slot.timeSlot}`} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                                             <span className="font-semibold">{slot.day}</span>
                                             <span className="text-muted-foreground">{slot.timeSlot}</span>
@@ -216,7 +242,7 @@ export function UserProfileClient({ user }: { user: User }) {
                          <TabsContent value="reviews" className="p-6">
                             <div>
                                 <h3 className="text-lg font-medium font-headline flex items-center gap-2"><MessageSquare/> Session Feedback</h3>
-                                <p className="text-sm text-muted-foreground">What learners are saying about {user.name}.</p>
+                                <p className="text-sm text-muted-foreground">What learners are saying about {initialUser.name}.</p>
                                 <div className="mt-4 space-y-4">
                                     {userSessionsAsTeacher.map(s => (
                                         <div key={s.id} className="p-4 border rounded-lg">
@@ -253,4 +279,3 @@ export function UserProfileClient({ user }: { user: User }) {
         </div>
     );
 }
-

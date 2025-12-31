@@ -130,7 +130,7 @@ export const users: User[] = [
   },
 ];
 
-export const currentUser = users[1]; // Let's assume Rohan Verma is the logged in user
+export let currentUser: User | null = null; // This will now be managed by Firebase auth state
 
 export const sessions: Session[] = [
     {
@@ -147,7 +147,7 @@ export const sessions: Session[] = [
     {
         id: 's1',
         teacher: users[0],
-        learner: currentUser,
+        learner: users[1], // Rohan
         skill: 'Python',
         duration: 1,
         creditsTransferred: 1,
@@ -158,7 +158,7 @@ export const sessions: Session[] = [
     },
     {
         id: 's2',
-        teacher: currentUser,
+        teacher: users[1], // Rohan
         learner: users[3],
         skill: 'React',
         duration: 2,
@@ -173,7 +173,7 @@ export const sessions: Session[] = [
     {
         id: 's3',
         teacher: users[2],
-        learner: currentUser,
+        learner: users[1], // Rohan
         skill: 'Graphic Design',
         duration: 1,
         creditsTransferred: 1,
@@ -184,7 +184,7 @@ export const sessions: Session[] = [
     },
     {
         id: 's4',
-        teacher: currentUser,
+        teacher: users[1], // Rohan
         learner: users[0],
         skill: 'Node.js',
         duration: 1,

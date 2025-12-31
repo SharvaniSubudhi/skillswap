@@ -1,246 +1,68 @@
 {
   "entities": {
-    "User": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "User",
+    "UserProfile": {
+      "title": "User Profile",
       "type": "object",
-      "description": "Represents a user profile in the SkillSwap Connect application.",
+      "description": "Represents a user's profile information.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the user entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The user's full name."
-        },
-        "email": {
-          "type": "string",
-          "description": "The user's email address. Must be an @edu.in domain.",
-          "format": "email"
-        },
+        "id": { "type": "string", "description": "The user's unique ID." },
+        "name": { "type": "string", "description": "The user's full name." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "avatarUrl": { "type": "string", "format": "uri", "description": "URL of the user's avatar." },
         "skillsKnown": {
           "type": "array",
-          "description": "List of skills the user possesses.",
           "items": {
-            "type": "string"
-          }
+            "type": "object",
+            "properties": {
+              "skillName": { "type": "string" },
+              "level": { "type": "string", "enum": ["basic", "intermediate", "advanced"] }
+            },
+            "required": ["skillName", "level"]
+          },
+          "description": "Skills the user can teach."
         },
         "skillsWanted": {
           "type": "array",
-          "description": "List of skills the user wants to learn.",
           "items": {
-            "type": "string"
-          }
-        },
-        "credits": {
-          "type": "number",
-          "description": "The number of credits the user has."
+            "type": "object",
+            "properties": {
+              "skillName": { "type": "string" }
+            },
+            "required": ["skillName"]
+          },
+          "description": "Skills the user wants to learn."
         },
         "availability": {
           "type": "array",
-          "description": "List of time slots when the user is available for sessions.",
           "items": {
-            "type": "string"
-          }
-        },
-        "rating": {
-          "type": "number",
-          "description": "The user's average rating as a teacher/learner."
-        },
-        "badges": {
-          "type": "array",
-          "description": "List of badges the user has earned (gamification).",
-          "items": {
-            "type": "string"
-          }
-        },
-        "status": {
-          "type": "string",
-          "description": "The user's current status (online/offline)."
+            "type": "object",
+            "properties": {
+              "day": { "type": "string" },
+              "timeSlot": { "type": "string" }
+            },
+            "required": ["day", "timeSlot"]
+          },
+          "description": "User's availability."
         },
         "studentIdProof": {
           "type": "string",
-          "description": "URL or path to the uploaded student ID proof for verification."
-        }
+          "description": "URL to the student ID proof."
+        },
+        "credits": { "type": "number" },
+        "rating": { "type": "number" },
+        "badges": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["online", "offline"] }
       },
-      "required": [
-        "id",
-        "name",
-        "email",
-        "skillsKnown",
-        "skillsWanted",
-        "credits",
-        "availability",
-        "rating",
-        "badges",
-        "status",
-        "studentIdProof"
-      ]
-    },
-    "Session": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Session",
-      "type": "object",
-      "description": "Represents a tutoring session between a teacher and a learner.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the session entity."
-        },
-        "teacherId": {
-          "type": "string",
-          "description": "Reference to User (teacher). (Relationship: User 1:N Session)"
-        },
-        "learnerId": {
-          "type": "string",
-          "description": "Reference to User (learner). (Relationship: User 1:N Session)"
-        },
-        "skill": {
-          "type": "string",
-          "description": "The skill being taught in the session."
-        },
-        "duration": {
-          "type": "number",
-          "description": "The duration of the session in hours."
-        },
-        "creditsTransferred": {
-          "type": "number",
-          "description": "The number of credits transferred for the session."
-        },
-        "googleMeetLink": {
-          "type": "string",
-          "description": "The Google Meet link for the session."
-        },
-        "status": {
-          "type": "string",
-          "description": "The status of the session (scheduled, completed, cancelled)."
-        },
-        "feedback": {
-          "type": "string",
-          "description": "Feedback provided by the learner after the session."
-        },
-        "disputeRaised": {
-          "type": "boolean",
-          "description": "Indicates whether a dispute has been raised for the session."
-        }
-      },
-      "required": [
-        "id",
-        "teacherId",
-        "learnerId",
-        "skill",
-        "duration",
-        "creditsTransferred",
-        "googleMeetLink",
-        "status",
-        "feedback",
-        "disputeRaised"
-      ]
-    },
-    "SkillVerification": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "SkillVerification",
-      "type": "object",
-      "description": "Represents a skill verification test for a user.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the skill verification entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N SkillVerification)"
-        },
-        "skill": {
-          "type": "string",
-          "description": "The skill being verified."
-        },
-        "level": {
-          "type": "string",
-          "description": "The skill level being verified (basic, intermediate, advanced)."
-        },
-        "geminiTestStatus": {
-          "type": "string",
-          "description": "The status of the Gemini test (pending, passed, failed)."
-        },
-        "cooldownUntil": {
-          "type": "string",
-          "description": "The date until which the user is on cooldown if the test failed.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "skill",
-        "level",
-        "geminiTestStatus",
-        "cooldownUntil"
-      ]
+      "required": ["id", "name", "email"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["password"]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profile information. Uses path-based ownership for simplified security rules.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/sessions/{sessionId}",
-        "definition": {
-          "entityName": "Session",
-          "schema": {
-            "$ref": "#/backend/entities/Session"
-          },
-          "description": "Stores session data. Includes 'teacherId' and 'learnerId' for authorization independence.",
-          "params": [
-            {
-              "name": "sessionId",
-              "description": "The unique identifier for the session."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/skillVerifications/{skillVerificationId}",
-        "definition": {
-          "entityName": "SkillVerification",
-          "schema": {
-            "$ref": "#/backend/entities/SkillVerification"
-          },
-          "description": "Stores skill verification test data for a specific user. Enforces ownership through the path.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "skillVerificationId",
-              "description": "The unique identifier for the skill verification test."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "The Firestore structure is designed to ensure security, scalability, and ease of debugging, adhering to the principles of Authorization Independence, Clarity of Intent, DBAC, and QAPs. Each design choice directly supports these principles.\n\n1.  **Users Collection:** The `/users/{userId}` collection stores user profiles. The structure uses path-based ownership, making security rules simple (`request.auth.uid == userId`).\n\n2.  **Sessions Collection:** The `/sessions/{sessionId}` collection stores session data. This structure segregates sessions globally, simplifying list operations and making it easier to query sessions across the entire application. To enable authorization independence, the teacherId and learnerId fields are included, so rules can validate session access based on `request.auth.uid`.\n\n3.  **SkillVerification Collection:** The `/users/{userId}/skillVerifications/{skillVerificationId}` collection stores skill verification data. This structure uses hierarchical paths to represent a one-to-many relationship between users and skill verifications, which simplifies security rules (`request.auth.uid == userId`).\n\nThis design prioritizes Authorization Independence, avoiding `get()` calls in security rules by denormalizing authorization data (e.g., user IDs in `/sessions`). Structural Segregation is achieved by storing different data types in separate collections, each with a homogeneous security posture. The access modeling strategy uses path-based ownership for user profiles and skill verifications, and the session data is modeled globally by containing foreign key references to its users.\n\nThis design supports QAPs by enabling secure list operations using structural segregation. For example, listing sessions is secure because access control is enforced at the collection level using `request.auth.uid` to compare with `teacherId` or `learnerId`. Also there are no rules that filter data.\n\nThe structure supports invariants by enforcing strict ownership and relationships, such as the one-to-many relationship between users and skill verifications, which can be enforced in security rules."
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores individual user profiles."
+    }
   }
 }

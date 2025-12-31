@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import { useFirebase } from "@/firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +23,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Logo from "@/components/logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 
 const formSchema = z.object({
@@ -32,6 +37,8 @@ const formSchema = z.object({
 
 export default function SignupPage() {
   const router = useRouter();
+  const { auth, firestore } = useFirebase();
+  const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -41,11 +48,40 @@ export default function SignupPage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // In a real app, you'd handle user creation here.
-    console.log(values);
-    // Redirect to profile setup after successful signup.
-    router.push("/dashboard/profile"); 
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!auth || !firestore) {
+      toast({ variant: "destructive", title: "Firebase not initialized." });
+      return;
+    }
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      const user = userCredential.user;
+
+      const userProfile = {
+        id: user.uid,
+        name: values.name,
+        email: values.email,
+        avatarUrl: `https://avatar.vercel.sh/${values.email}.png`,
+        skillsKnown: [],
+        skillsWanted: [],
+        availability: [],
+        credits: 0,
+        rating: 0,
+        badges: [],
+        status: 'online',
+      };
+      
+      const userDocRef = doc(firestore, "users", user.uid);
+      setDocumentNonBlocking(userDocRef, userProfile, { merge: false });
+
+      router.push("/dashboard/profile");
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Signup Failed",
+        description: error.message,
+      });
+    }
   }
 
   return (

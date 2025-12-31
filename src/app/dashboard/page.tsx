@@ -1,4 +1,6 @@
-import { users, currentUser } from "@/lib/data"
+"use client";
+
+import { users } from "@/lib/data"
 import type { User } from "@/lib/types"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -6,9 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Star, ArrowRight } from "lucide-react"
-
-// In a real app, this would come from the AI recommendation engine
-const recommendedUsers = users.filter(u => u.id !== currentUser.id);
+import { useFirebase } from "@/firebase";
+import React from "react";
 
 const getInitials = (name: string) => {
     const names = name.split(' ')
@@ -56,6 +57,11 @@ function UserCard({ user }: { user: User }) {
 }
 
 export default function DashboardPage() {
+  const { user: authUser } = useFirebase();
+  
+  // In a real app, this would come from the AI recommendation engine
+  const recommendedUsers = authUser ? users.filter(u => u.id !== authUser.uid) : users;
+
   return (
     <div className="space-y-6">
       <div>

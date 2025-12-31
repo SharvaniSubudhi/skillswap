@@ -1,4 +1,6 @@
-import { currentUser, sessions } from "@/lib/data"
+"use client";
+
+import { sessions } from "@/lib/data";
 import {
   Card,
   CardContent,
@@ -19,16 +21,33 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Gem, PlusCircle, ArrowUpRight, ArrowDownLeft } from "lucide-react"
 import { format } from "date-fns"
+import { useFirebase } from "@/firebase";
+import React from "react";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function CreditsPage() {
+  const { user, firestore } = useFirebase();
+  const [currentUserProfile, setCurrentUserProfile] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (user && firestore) {
+      const userDocRef = doc(firestore, "users", user.uid);
+      getDoc(userDocRef).then((docSnap) => {
+        if (docSnap.exists()) {
+          setCurrentUserProfile(docSnap.data());
+        }
+      });
+    }
+  }, [user, firestore]);
+
   const transactions = sessions
     .filter(
       (s) =>
-        s.status === "completed" &&
-        (s.learner.id === currentUser.id || s.teacher.id === currentUser.id)
+        currentUserProfile && s.status === "completed" &&
+        (s.learner.id === currentUserProfile.id || s.teacher.id === currentUserProfile.id)
     )
     .map((s) => {
-      const isEarned = s.teacher.id === currentUser.id
+      const isEarned = s.teacher.id === currentUserProfile.id
       return {
         id: s.id,
         type: isEarned ? "Earned" : "Spent",
@@ -56,7 +75,7 @@ export default function CreditsPage() {
             <CardDescription>Current Balance</CardDescription>
             <CardTitle className="flex items-center gap-2 text-4xl font-headline">
               <Gem className="h-8 w-8 text-accent" />
-              {currentUser.credits}
+              {currentUserProfile?.credits || 0}
             </CardTitle>
           </CardHeader>
           <CardContent>

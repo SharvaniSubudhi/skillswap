@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { sessions, currentUser } from "@/lib/data";
-import type { Session } from "@/lib/types";
+import { sessions } from "@/lib/data"; // Keep using mock sessions for now
+import { useFirebase } from "@/firebase";
+import type { Session, User } from "@/lib/types";
 import { formatInTimeZone } from "date-fns-tz";
 import { Video, Star, MessageSquare, AlertCircle, Check, X } from "lucide-react";
 import { createSession } from "@/ai/flows/create-session";
 import { useToast } from "@/hooks/use-toast";
+import { doc, getDoc } from "firebase/firestore";
 
 type CreateSessionInput = {
     teacher: { name: string, email: string };
@@ -36,9 +38,9 @@ const statusColors = {
 };
 
 
-const SessionCard = ({ session }: { session: Session }) => {
+const SessionCard = ({ session, currentUser }: { session: Session, currentUser: User | null }) => {
     const { toast } = useToast();
-    const isTeacher = session.teacher.id === currentUser.id;
+    const isTeacher = session.teacher.id === currentUser?.id;
     const otherUser = isTeacher ? session.learner : session.teacher;
 
     const handleJoinNow = async () => {
@@ -210,10 +212,25 @@ const RequestCard = ({ session }: { session: Session }) => {
 
 
 export default function SessionsPage() {
-    const sessionRequests = sessions.filter(s => s.status === 'requested' && s.teacher.id === currentUser.id);
-    const scheduledSessions = sessions.filter(s => s.status === 'scheduled' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
-    const completedSessions = sessions.filter(s => s.status === 'completed' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
-    const cancelledSessions = sessions.filter(s => s.status === 'cancelled' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
+    const { user, firestore } = useFirebase();
+    const [currentUser, setCurrentUser] = React.useState<User | null>(null);
+
+    React.useEffect(() => {
+        if(user && firestore) {
+            const userDocRef = doc(firestore, "users", user.uid);
+            getDoc(userDocRef).then(docSnap => {
+                if(docSnap.exists()){
+                    setCurrentUser(docSnap.data() as User)
+                }
+            })
+        }
+    }, [user, firestore])
+
+
+    const sessionRequests = sessions.filter(s => currentUser && s.status === 'requested' && s.teacher.id === currentUser.id);
+    const scheduledSessions = sessions.filter(s => currentUser && s.status === 'scheduled' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
+    const completedSessions = sessions.filter(s => currentUser && s.status === 'completed' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
+    const cancelledSessions = sessions.filter(s => currentUser && s.status === 'cancelled' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
 
     return (
         <div className="space-y-6">
@@ -244,7 +261,7 @@ export default function SessionsPage() {
                 <TabsContent value="scheduled" className="mt-6">
                     {scheduledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {scheduledSessions.map(s => <SessionCard key={s.id} session={s} />)}
+                            {scheduledSessions.map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No scheduled sessions.</p>
@@ -253,7 +270,7 @@ export default function SessionsPage() {
                 <TabsContent value="completed" className="mt-6">
                     {completedSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {completedSessions.map(s => <SessionCard key={s.id} session={s} />)}
+                            {completedSessions.map(s => <SessionCard key={s.id} session={s} currentUser={currentUser}/>)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No completed sessions.</p>
@@ -262,7 +279,7 @@ export default function SessionsPage() {
                 <TabsContent value="cancelled" className="mt-6">
                     {cancelledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {cancelledSessions.map(s => <SessionCard key={s.id} session={s} />)}
+                            {cancelledSessions.map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No cancelled sessions.</p>

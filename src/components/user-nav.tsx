@@ -12,13 +12,38 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { currentUser } from "@/lib/data"
+import { useFirebase } from "@/firebase"
+import { signOut } from "firebase/auth"
+import { doc, getDoc } from "firebase/firestore"
+import React from "react"
 import { LifeBuoy, LogOut, Settings, User } from "lucide-react"
+import { Skeleton } from "./ui/skeleton"
 
 export function UserNav() {
-  if (!currentUser) return null
+  const { user, auth, firestore } = useFirebase();
+  const [userProfile, setUserProfile] = React.useState<any>(null);
 
-  const getInitials = (name: string) => {
+  React.useEffect(() => {
+    if (user && firestore) {
+      const userDocRef = doc(firestore, "users", user.uid);
+      const unsubscribe = onSnapshot(userDocRef, (doc) => {
+        if (doc.exists()) {
+          setUserProfile(doc.data());
+        } else {
+          setUserProfile(null);
+        }
+      });
+      return () => unsubscribe();
+    }
+  }, [user, firestore]);
+
+  const handleLogout = () => {
+    if (auth) {
+      signOut(auth);
+    }
+  };
+
+  const getInitials = (name: string = "") => {
     const names = name.split(' ')
     if (names.length > 1) {
       return `${names[0][0]}${names[names.length - 1][0]}`
@@ -26,22 +51,39 @@ export function UserNav() {
     return name.substring(0, 2)
   }
 
+  if (!user) {
+    return (
+      <div className="flex items-center gap-4">
+        <Button asChild variant="ghost">
+          <Link href="/login">Log In</Link>
+        </Button>
+        <Button asChild>
+          <Link href="/signup">Sign Up</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  if (!userProfile) {
+    return <Skeleton className="h-10 w-10 rounded-full" />;
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
-            <AvatarFallback>{getInitials(currentUser.name)}</AvatarFallback>
+            <AvatarImage src={userProfile.avatarUrl} alt={userProfile.name} />
+            <AvatarFallback>{getInitials(userProfile.name)}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{currentUser.name}</p>
+            <p className="text-sm font-medium leading-none">{userProfile.name}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {currentUser.email}
+              {userProfile.email}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -64,11 +106,9 @@ export function UserNav() {
             <span>Support</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/">
+        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
             <LogOut className="mr-2 h-4 w-4" />
             <span>Log out</span>
-          </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
