@@ -13,6 +13,7 @@ import { collection, doc, getDoc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getRecommendations } from "@/ai/flows/get-recommendations";
 import { ScheduleSlotDialog } from "@/components/schedule-slot-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 const getInitials = (name: string) => {
     const names = name.split(' ')
@@ -100,6 +101,7 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
   const [recommendedUsers, setRecommendedUsers] = React.useState<User[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const { toast } = useToast();
 
   const usersQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -129,6 +131,11 @@ export default function DashboardPage() {
           setRecommendedUsers(recommendations);
         } catch (error) {
           console.error("Failed to get recommendations:", error);
+          toast({
+            variant: "destructive",
+            title: "Could not load AI recommendations",
+            description: "Displaying all users as a fallback. You may have exceeded the API quota.",
+          });
           // Fallback to simple filtering if AI fails
           setRecommendedUsers(allUsers.filter(u => u.id !== currentUser.id));
         } finally {
@@ -147,7 +154,7 @@ export default function DashboardPage() {
         // Handle case where authUser is loaded but currentUser profile is not yet fetched
         setIsLoading(false);
     }
-  }, [currentUser, allUsers, authUser]);
+  }, [currentUser, allUsers, authUser, toast]);
 
   return (
     <div className="space-y-6">
