@@ -5,14 +5,14 @@ import type { User } from "@/lib/types"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Star, ArrowRight } from "lucide-react"
+import { Star } from "lucide-react"
 import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
 import React from "react";
-import { collection, query, where, documentId, doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getRecommendations } from "@/ai/flows/get-recommendations";
+import { ScheduleSlotDialog } from "@/components/schedule-slot-dialog";
 
 const getInitials = (name: string) => {
     const names = name.split(' ')
@@ -22,7 +22,7 @@ const getInitials = (name: string) => {
     return name.substring(0, 2)
   }
 
-function UserCard({ user }: { user: User }) {
+function UserCard({ user, currentUser }: { user: User, currentUser: User | null }) {
   return (
     <Card className="flex flex-col h-full transition-all hover:shadow-lg">
       <CardHeader className="flex-row gap-4 items-center">
@@ -31,7 +31,9 @@ function UserCard({ user }: { user: User }) {
           <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
         </Avatar>
         <div>
-          <CardTitle className="font-headline text-xl">{user.name}</CardTitle>
+            <Link href={`/users/${user.id}`}>
+          <CardTitle className="font-headline text-xl hover:underline">{user.name}</CardTitle>
+            </Link>
           <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
             <Star className="w-4 h-4 fill-yellow-400 text-yellow-500" />
             <span>{user.rating?.toFixed(1) || 'N/A'}</span>
@@ -63,11 +65,7 @@ function UserCard({ user }: { user: User }) {
         </div>
       </CardContent>
       <CardFooter>
-        <Button asChild className="w-full">
-          <Link href={`/users/${user.id}`}>
-            View Profile <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+        <ScheduleSlotDialog user={user} currentUser={currentUser} />
       </CardFooter>
     </Card>
   )
@@ -163,7 +161,7 @@ export default function DashboardPage() {
             Array.from({ length: 4 }).map((_, i) => <UserCardSkeleton key={i} />)
         )}
         {!isLoading && recommendedUsers.map((user) => (
-          <UserCard key={user.id} user={user} />
+          <UserCard key={user.id} user={user} currentUser={currentUser}/>
         ))}
          {!isLoading && recommendedUsers.length === 0 && (
             <div className="text-center text-muted-foreground py-12 col-span-full">
