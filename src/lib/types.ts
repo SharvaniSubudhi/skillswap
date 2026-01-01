@@ -22,7 +22,6 @@ export type User = {
   badges: string[]; // e.g., ["Top Mentor", "Fast Learner"]
   status: 'online' | 'offline';
   avatarUrl: string;
-  studentIdProof?: string;
 };
 
 export type Session = {

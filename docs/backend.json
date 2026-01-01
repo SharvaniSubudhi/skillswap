@@ -46,10 +46,6 @@
           },
           "description": "User's availability."
         },
-        "studentIdProof": {
-          "type": "string",
-          "description": "URL to the student ID proof."
-        },
         "credits": { "type": "number" },
         "rating": { "type": "number" },
         "badges": { "type": "array", "items": { "type": "string" } },

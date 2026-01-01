@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Gem, Upload, Star, Award, Verified, X, CalendarPlus, Paperclip, CheckCircle, BookOpen } from "lucide-react";
+import { Gem, Star, Award, Verified, X, CalendarPlus, CheckCircle, BookOpen } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,7 +40,6 @@ const profileSchema = z.object({
         day: z.string().min(1, "Day is required"),
         timeSlot: z.string().min(1, "Time slot is required"),
     })),
-    studentIdProof: z.string().optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -63,7 +62,6 @@ export default function ProfilePage() {
     const [newWantedSkill, setNewWantedSkill] = React.useState("");
     const [newAvailabilityDay, setNewAvailabilityDay] = React.useState("");
     const [newAvailabilityTime, setNewAvailabilityTime] = React.useState("");
-    const [studentIdFile, setStudentIdFile] = React.useState<File | null>(null);
 
     const [isVerifying, setIsVerifying] = React.useState(false);
     const [quiz, setQuiz] = React.useState<GenerateSkillQuizOutput & { skillName: string } | null>(null);
@@ -76,7 +74,6 @@ export default function ProfilePage() {
             skillsKnown: [],
             skillsWanted: [],
             availability: [],
-            studentIdProof: "",
         },
     });
 
@@ -108,21 +105,12 @@ export default function ProfilePage() {
                         skillsKnown: data.skillsKnown || [],
                         skillsWanted: data.skillsWanted || [],
                         availability: data.availability || [],
-                        studentIdProof: data.studentIdProof || "",
                     });
                 }
                 setIsLoading(false);
             });
         }
     }, [user, firestore, form]);
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            setStudentIdFile(file);
-            form.setValue("studentIdProof", file.name);
-        }
-    };
 
     const handleVerifySkill = async (skillName: string) => {
         setIsVerifying(true);
@@ -171,10 +159,6 @@ export default function ProfilePage() {
             ...data
         };
 
-        if (studentIdFile) {
-            profileData.studentIdProof = studentIdFile.name;
-        }
-
         setDocumentNonBlocking(userDocRef, profileData, { merge: true });
 
         toast({
@@ -220,10 +204,9 @@ export default function ProfilePage() {
 
                 <Card className="flex-1">
                      <Tabs defaultValue="account">
-                        <TabsList className="grid w-full grid-cols-4">
+                        <TabsList className="grid w-full grid-cols-3">
                             <TabsTrigger value="account">Account</TabsTrigger>
                             <TabsTrigger value="skills">Skills</TabsTrigger>
-                            <TabsTrigger value="verification">Verification</TabsTrigger>
                             <TabsTrigger value="availability">Availability</TabsTrigger>
                         </TabsList>
                         <TabsContent value="account" className="p-6">
@@ -243,35 +226,7 @@ export default function ProfilePage() {
                                         <Input id="email" {...form.register("email")} disabled />
                                     </div>
                                 </div>
-                                <div className="space-y-4 pt-6 border-t">
-                                  <h3 className="text-lg font-medium font-headline">Student Verification</h3>
-                                   <p className="text-sm text-muted-foreground">Upload your student ID for fraud prevention.</p>
-                                   <Card className="bg-secondary/50">
-                                      <CardContent className="pt-6">
-                                        {form.watch("studentIdProof") && !studentIdFile ? (
-                                             <div className="flex items-center justify-between p-4 rounded-lg border">
-                                                <div className="flex items-center gap-2">
-                                                    <Paperclip className="h-5 w-5 text-muted-foreground"/>
-                                                    <span className="text-sm font-medium">{form.watch("studentIdProof")}</span>
-                                                </div>
-                                                <Button variant="ghost" size="sm" onClick={() => { form.setValue("studentIdProof", ""); setStudentIdFile(null); }}>Change</Button>
-                                             </div>
-                                        ) : (
-                                            <div className="flex items-center gap-4 p-4 rounded-lg border-dashed border-2">
-                                               <Upload className="h-8 w-8 text-muted-foreground"/>
-                                               <div>
-                                                 <Label htmlFor="student-id" className="cursor-pointer text-primary font-semibold">
-                                                   {studentIdFile ? "File selected: " + studentIdFile.name : "Click to upload a file"}
-                                                   <Input id="student-id" type="file" className="sr-only" onChange={handleFileChange} accept="image/png, image/jpeg, application/pdf"/>
-                                                 </Label>
-                                                 <p className="text-xs text-muted-foreground">PNG, JPG, PDF up to 5MB</p>
-                                               </div>
-                                            </div>
-                                        )}
-                                      </CardContent>
-                                   </Card>
-                                </div>
-                                <div className="pt-6">
+                                <div className="pt-6 border-t">
                                      <Button type="submit">Save All Changes</Button>
                                 </div>
                             </div>
@@ -293,7 +248,16 @@ export default function ProfilePage() {
                                                     <span className="font-medium">{form.watch(`skillsKnown.${index}.skillName`)}</span>
                                                     <Badge variant="outline" className="capitalize">{form.watch(`skillsKnown.${index}.level`)}</Badge>
                                                 </div>
-                                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeSkillKnown(index)}><X className="h-4 w-4"/></Button>
+                                               <div className="flex items-center gap-2">
+                                                    {!field.isVerified ? (
+                                                        <Button size="sm" type="button" variant="outline" onClick={() => handleVerifySkill(field.skillName)} disabled={isVerifying}>
+                                                            {isVerifying && quiz?.skillName !== field.skillName ? 'Verifying...' : 'Get Verified'}
+                                                        </Button>
+                                                    ) : (
+                                                        <Badge variant="secondary" className="border-green-500/50 text-green-600">Verified</Badge>
+                                                    )}
+                                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeSkillKnown(index)}><X className="h-4 w-4"/></Button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -325,70 +289,8 @@ export default function ProfilePage() {
                                         }}>Add Skill</Button>
                                     </div>
                                 </div>
-                                <div className="pt-6 border-t">
-                                    <h3 className="text-lg font-medium font-headline">Skills You Want to Learn</h3>
-                                    <p className="text-sm text-muted-foreground">Skills you are interested in learning from others.</p>
-                                     <div className="mt-4 space-y-3">
-                                        {skillsWantedFields.map((field, index) => (
-                                            <div key={field.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                                               <span className="font-medium">{form.watch(`skillsWanted.${index}.skillName`)}</span>
-                                               <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeSkillWanted(index)}><X className="h-4 w-4"/></Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="mt-4 flex gap-2">
-                                        <Input 
-                                            placeholder="e.g. Graphic Design" 
-                                            value={newWantedSkill}
-                                            onChange={(e) => setNewWantedSkill(e.target.value)}
-                                        />
-                                        <Button type="button" onClick={() => {
-                                            if (newWantedSkill) {
-                                                appendSkillWanted({ skillName: newWantedSkill });
-                                                setNewWantedSkill('');
-                                            }
-                                        }}>Add Skill</Button>
-                                    </div>
-                                </div>
-                             </div>
-                        </TabsContent>
-                        <TabsContent value="verification" className="p-6">
-                            <div className="space-y-6">
-                                <div>
-                                    <h3 className="text-lg font-medium font-headline">Skill Verification</h3>
-                                    <p className="text-sm text-muted-foreground">Take a short, AI-generated quiz to get a "Verified" badge for your skills.</p>
-                                </div>
-                                <div className="space-y-4">
-                                    {skillsKnownFields.map((skill, index) => (
-                                        <Card key={skill.id} className="p-4">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    {skill.isVerified ? (
-                                                        <CheckCircle className="w-5 h-5 text-green-500" />
-                                                    ) : (
-                                                        <Verified className="w-5 h-5 text-muted-foreground" />
-                                                    )}
-                                                    <div>
-                                                        <p className="font-semibold">{skill.skillName}</p>
-                                                        <p className="text-xs text-muted-foreground capitalize">{skill.level}</p>
-                                                    </div>
-                                                </div>
-                                                {skill.isVerified ? (
-                                                    <Badge variant="secondary" className="border-green-500/50 text-green-600">Verified</Badge>
-                                                ) : (
-                                                    <Button size="sm" onClick={() => handleVerifySkill(skill.skillName)} disabled={isVerifying}>
-                                                        {isVerifying ? 'Generating...' : 'Get Verified'}
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </Card>
-                                    ))}
-                                    {skillsKnownFields.length === 0 && (
-                                        <p className="text-center text-muted-foreground py-8">Add a skill you know to get started.</p>
-                                    )}
-                                </div>
-
-                                {isVerifying && <p className="text-center text-muted-foreground animate-pulse">Gemini is preparing your test...</p>}
+                                
+                                {isVerifying && <p className="text-center text-muted-foreground animate-pulse pt-4">Gemini is preparing your test...</p>}
 
                                 {quiz && (
                                     <Card className="mt-6 bg-primary/5 p-6">
@@ -418,7 +320,32 @@ export default function ProfilePage() {
                                     </Card>
                                 )}
 
-                            </div>
+                                <div className="pt-6 border-t">
+                                    <h3 className="text-lg font-medium font-headline">Skills You Want to Learn</h3>
+                                    <p className="text-sm text-muted-foreground">Skills you are interested in learning from others.</p>
+                                     <div className="mt-4 space-y-3">
+                                        {skillsWantedFields.map((field, index) => (
+                                            <div key={field.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                                               <span className="font-medium">{form.watch(`skillsWanted.${index}.skillName`)}</span>
+                                               <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeSkillWanted(index)}><X className="h-4 w-4"/></Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4 flex gap-2">
+                                        <Input 
+                                            placeholder="e.g. Graphic Design" 
+                                            value={newWantedSkill}
+                                            onChange={(e) => setNewWantedSkill(e.target.value)}
+                                        />
+                                        <Button type="button" onClick={() => {
+                                            if (newWantedSkill) {
+                                                appendSkillWanted({ skillName: newWantedSkill });
+                                                setNewWantedSkill('');
+                                            }
+                                        }}>Add Skill</Button>
+                                    </div>
+                                </div>
+                             </div>
                         </TabsContent>
                         <TabsContent value="availability" className="p-6">
                             <div className="space-y-6">
@@ -473,5 +400,3 @@ export default function ProfilePage() {
         </form>
     );
 }
-
-    
