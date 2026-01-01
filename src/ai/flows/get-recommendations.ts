@@ -39,13 +39,13 @@ const UserProfileSchema = z.object({
   badges: z.array(z.string()),
 });
 
-export const GetRecommendationsInputSchema = z.object({
+const GetRecommendationsInputSchema = z.object({
   currentUser: UserProfileSchema,
   allUsers: z.array(UserProfileSchema),
 });
 export type GetRecommendationsInput = z.infer<typeof GetRecommendationsInputSchema>;
 
-export const GetRecommendationsOutputSchema = z.array(UserProfileSchema);
+const GetRecommendationsOutputSchema = z.array(UserProfileSchema);
 export type GetRecommendationsOutput = z.infer<typeof GetRecommendationsOutputSchema>;
 
 
