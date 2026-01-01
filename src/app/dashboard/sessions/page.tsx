@@ -64,7 +64,6 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
 
     const getFormattedDate = () => {
         if (!session.sessionDate) return "Date not set";
-        // Firestore timestamps have a toDate() method.
         const date = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
         if (isNaN(date.getTime())) return "Invalid date";
         return formatInTimeZone(date, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
@@ -221,6 +220,11 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
 
             await batch.commit();
 
+            toast({
+                title: 'Request Accepted!',
+                description: 'The session has been scheduled and credits transferred.',
+            });
+
             // 2. Create calendar event and send notification
             const sessionDate = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
             const input: CreateSessionInput = {
@@ -235,11 +239,6 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
             if (result.success && result.meetLink) {
                  // 3. Update session with meet link
                 updateDocumentNonBlocking(sessionRef, { googleMeetLink: result.meetLink });
-
-                toast({
-                    title: 'Request Accepted!',
-                    description: 'The session has been scheduled and credits transferred.',
-                });
             } else {
                 // If this fails, we should ideally roll back the credit transfer.
                 // For MVP, we'll show an error.
@@ -267,7 +266,7 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
         });
     };
     
-    if (!learner) return null;
+    if (!learner || !teacher) return null;
 
     return (
         <Card className="bg-secondary/50">
@@ -367,7 +366,7 @@ export default function SessionsPage() {
                 <TabsContent value="scheduled" className="mt-6">
                     {scheduledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {scheduledSessions.map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
+                            {scheduledSessions.sort((a,b) => b.sessionDate.toDate() - a.sessionDate.toDate()).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No scheduled sessions.</p>
@@ -376,7 +375,7 @@ export default function SessionsPage() {
                 <TabsContent value="completed" className="mt-6">
                     {completedSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {completedSessions.map(s => <SessionCard key={s.id} session={s} currentUser={currentUser}/>)}
+                            {completedSessions.sort((a,b) => b.sessionDate.toDate() - a.sessionDate.toDate()).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser}/>)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No completed sessions.</p>
@@ -385,7 +384,7 @@ export default function SessionsPage() {
                 <TabsContent value="cancelled" className="mt-6">
                     {cancelledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {cancelledSessions.map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
+                            {cancelledSessions.sort((a,b) => b.sessionDate.toDate() - a.sessionDate.toDate()).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No cancelled sessions.</p>

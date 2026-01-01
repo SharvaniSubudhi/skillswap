@@ -126,7 +126,7 @@ const CreateSessionInputSchema = z.object({
   sessionDate: z.string().datetime(),
   duration: z.number().describe('Duration in hours'),
 });
-type CreateSessionInput = z.infer<typeof CreateSessionInputSchema>;
+export type CreateSessionInput = z.infer<typeof CreateSessionInputSchema>;
 
 const CreateSessionOutputSchema = z.object({
   success: z.boolean(),
@@ -134,7 +134,7 @@ const CreateSessionOutputSchema = z.object({
   meetLink: z.string().optional(),
   calendarLink: z.string().optional(),
 });
-type CreateSessionOutput = z.infer<typeof CreateSessionOutputSchema>;
+export type CreateSessionOutput = z.infer<typeof CreateSessionOutputSchema>;
 
 
 // Define the main flow
@@ -161,26 +161,36 @@ const createSessionFlow = ai.defineFlow(
 
     const calendarEvent = await createCalendarEvent(eventDetails);
 
-    const emailBody = `
-        <h1>SkillSwap Session Confirmed!</h1>
-        <p>Your session for <strong>${skill}</strong> is confirmed.</p>
-        <p><strong>Teacher:</strong> ${teacher.name}</p>
-        <p><strong>Learner:</strong> ${learner.name}</p>
+    // Notification for the Learner
+    const learnerEmailBody = `
+        <h1>Your SkillSwap Slot is Booked!</h1>
+        <p>Your session for <strong>${skill}</strong> with <strong>${teacher.name}</strong> has been confirmed.</p>
         <p><strong>Time:</strong> ${startTime.toLocaleString()}</p>
+        <p>1 credit has been transferred for this session.</p>
+        <p>Join the session using this link: <a href="${calendarEvent.hangoutLink}">Google Meet</a></p>
+        <p>View the event on your calendar: <a href="${calendarEvent.htmlLink}">Google Calendar</a></p>
+    `;
+
+    await sendEmail({
+        to: learner.email,
+        subject: `Your SkillSwap session for ${skill} is confirmed!`,
+        body: learnerEmailBody,
+    });
+    
+    // Notification for the Teacher
+    const teacherEmailBody = `
+        <h1>SkillSwap Session Confirmed!</h1>
+        <p>You have accepted the session for <strong>${skill}</strong> with <strong>${learner.name}</strong>.</p>
+        <p><strong>Time:</strong> ${startTime.toLocaleString()}</p>
+        <p>1 credit has been added to your account.</p>
         <p>Join the session using this link: <a href="${calendarEvent.hangoutLink}">Google Meet</a></p>
         <p>View the event on your calendar: <a href="${calendarEvent.htmlLink}">Google Calendar</a></p>
     `;
 
     await sendEmail({
         to: teacher.email,
-        subject: `Your SkillSwap session for ${skill} is confirmed!`,
-        body: emailBody,
-    });
-    
-    await sendEmail({
-        to: learner.email,
-        subject: `Your SkillSwap session for ${skill} is confirmed!`,
-        body: emailBody,
+        subject: `You have confirmed a SkillSwap session for ${skill}!`,
+        body: teacherEmailBody,
     });
 
     return {
