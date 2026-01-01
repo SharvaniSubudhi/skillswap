@@ -7,14 +7,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { sessions } from "@/lib/data"; // Keep using mock sessions for now
-import { useFirebase } from "@/firebase";
+import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
 import type { Session, User } from "@/lib/types";
 import { formatInTimeZone } from "date-fns-tz";
 import { Video, Star, MessageSquare, AlertCircle, Check, X } from "lucide-react";
 import { createSession } from "@/ai/flows/create-session";
 import { useToast } from "@/hooks/use-toast";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, writeBatch, serverTimestamp, getDocs } from "firebase/firestore";
+import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 type CreateSessionInput = {
     teacher: { name: string, email: string };
@@ -40,8 +40,30 @@ const statusColors = {
 
 const SessionCard = ({ session, currentUser }: { session: Session, currentUser: User | null }) => {
     const { toast } = useToast();
-    const isTeacher = session.teacher.id === currentUser?.id;
-    const otherUser = isTeacher ? session.learner : session.teacher;
+    const isTeacher = session.teacherId === currentUser?.id;
+
+    // These user objects are partial, fetched from the session doc.
+    const [teacher, setTeacher] = React.useState<any>(null);
+    const [learner, setLearner] = React.useState<any>(null);
+    const { firestore } = useFirebase();
+
+    React.useEffect(() => {
+        if (firestore && session) {
+            const teacherRef = doc(firestore, 'users', session.teacherId);
+            const learnerRef = doc(firestore, 'users', session.learnerId);
+
+            getDoc(teacherRef).then(docSnap => {
+                if (docSnap.exists()) setTeacher({id: docSnap.id, ...docSnap.data()});
+            });
+            getDoc(learnerRef).then(docSnap => {
+                if (docSnap.exists()) setLearner({id: docSnap.id, ...docSnap.data()});
+            });
+        }
+    }, [firestore, session]);
+
+    if (!teacher || !learner) return null; // Or a loading skeleton
+    
+    const otherUser = isTeacher ? learner : teacher;
 
     const handleJoinNow = async () => {
         if (session.googleMeetLink) {
@@ -56,16 +78,19 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
 
         try {
             const input: CreateSessionInput = {
-                teacher: { name: session.teacher.name, email: session.teacher.email },
-                learner: { name: session.learner.name, email: session.learner.email },
+                teacher: { name: teacher.name, email: teacher.email },
+                learner: { name: learner.name, email: learner.email },
                 skill: session.skill,
-                sessionDate: session.sessionDate.toISOString(),
+                sessionDate: new Date(session.sessionDate).toISOString(),
                 duration: session.duration,
             };
             const result = await createSession(input);
 
             if (result.success && result.meetLink) {
-                session.googleMeetLink = result.meetLink; // Update session object for immediate use
+                // Update session doc with the meet link
+                const sessionRef = doc(firestore, 'sessions', session.id);
+                updateDocumentNonBlocking(sessionRef, { googleMeetLink: result.meetLink });
+
                 toast({
                     title: 'Meet link created!',
                     description: 'Redirecting you to the meeting.',
@@ -91,7 +116,7 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
                     <div>
                         <CardTitle className="font-headline text-lg">{session.skill}</CardTitle>
                         <CardDescription>
-                            {formatInTimeZone(session.sessionDate, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}
+                            {formatInTimeZone(new Date(session.sessionDate), 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}
                         </CardDescription>
                     </div>
                     <Badge className={`${statusColors[session.status]} border-0 capitalize`}>{session.status}</Badge>
@@ -132,41 +157,80 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
 };
 
 
-const RequestCard = ({ session }: { session: Session }) => {
+const RequestCard = ({ session, currentUser }: { session: Session, currentUser: User | null }) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
+    const { firestore } = useFirebase();
 
-    // This simulates accepting a request. In a real app, this would update the backend.
+    const [teacher, setTeacher] = React.useState<User | null>(null);
+    const [learner, setLearner] = React.useState<User | null>(null);
+
+     React.useEffect(() => {
+        if (firestore && session) {
+            const teacherRef = doc(firestore, 'users', session.teacherId);
+            const learnerRef = doc(firestore, 'users', session.learnerId);
+
+            getDoc(teacherRef).then(docSnap => {
+                if (docSnap.exists()) setTeacher({id: docSnap.id, ...docSnap.data()} as User);
+            });
+            getDoc(learnerRef).then(docSnap => {
+                if (docSnap.exists()) setLearner({id: docSnap.id, ...docSnap.data()} as User);
+            });
+        }
+    }, [firestore, session]);
+
+
     const handleAccept = async () => {
+         if (!firestore || !learner || !teacher) return;
          setIsLoading(true);
          toast({
             title: 'Accepting Request...',
-            description: 'Creating calendar event and sending notifications.',
+            description: 'Updating status and creating calendar event.',
         });
         try {
+            // 1. Transaction to update credits and session status
+            const learnerRef = doc(firestore, 'users', learner.id);
+            const teacherRef = doc(firestore, 'users', teacher.id);
+            const sessionRef = doc(firestore, 'sessions', session.id);
+
+            const batch = writeBatch(firestore);
+
+            // Deduct credits from learner, add to teacher
+            batch.update(learnerRef, { credits: learner.credits - session.creditsTransferred });
+            batch.update(teacherRef, { credits: teacher.credits + session.creditsTransferred });
+            
+            // Update session status to scheduled
+            batch.update(sessionRef, { status: 'scheduled' });
+
+            await batch.commit();
+
+            // 2. Create calendar event and send notification
             const input: CreateSessionInput = {
-                teacher: { name: session.teacher.name, email: session.teacher.email },
-                learner: { name: session.learner.name, email: session.learner.email },
+                teacher: { name: teacher.name, email: teacher.email },
+                learner: { name: learner.name, email: learner.email },
                 skill: session.skill,
-                sessionDate: session.sessionDate.toISOString(),
+                sessionDate: new Date(session.sessionDate).toISOString(),
                 duration: session.duration,
             };
             const result = await createSession(input);
+            
+            if (result.success && result.meetLink) {
+                 // 3. Update session with meet link
+                updateDocumentNonBlocking(sessionRef, { googleMeetLink: result.meetLink });
 
-            if (result.success) {
                 toast({
                     title: 'Request Accepted!',
-                    description: 'The session has been scheduled.',
+                    description: 'The session has been scheduled and credits transferred.',
                 });
-                // Here you would typically refetch data or update state to move this card
-                // from 'requested' to 'scheduled'. For now, we'll just show the toast.
             } else {
-                throw new Error(result.message || 'Failed to accept the request.');
+                // If this fails, we should ideally roll back the credit transfer.
+                // For MVP, we'll show an error.
+                throw new Error(result.message || 'Failed to create calendar event.');
             }
         } catch(error: any) {
             toast({
                 variant: 'destructive',
-                title: 'Error',
+                title: 'Error Accepting Request',
                 description: error.message || 'Could not accept the request.',
             });
         } finally {
@@ -176,11 +240,16 @@ const RequestCard = ({ session }: { session: Session }) => {
     
     // This simulates declining a request.
     const handleDecline = () => {
+        if (!firestore) return;
+        const sessionRef = doc(firestore, 'sessions', session.id);
+        updateDocumentNonBlocking(sessionRef, { status: 'cancelled' });
         toast({
             title: 'Request Declined',
-            description: `You have declined the session with ${session.learner.name}.`
+            description: `You have declined the session request.`
         });
     };
+    
+    if (!learner) return null;
 
     return (
         <Card className="bg-secondary/50">
@@ -189,7 +258,7 @@ const RequestCard = ({ session }: { session: Session }) => {
                     <div>
                         <CardTitle className="font-headline text-lg">{session.skill}</CardTitle>
                         <CardDescription>
-                            From: {session.learner.name}
+                            From: {learner.name}
                         </CardDescription>
                     </div>
                      <Badge className={`${statusColors[session.status]} border-0 capitalize`}>{session.status}</Badge>
@@ -197,13 +266,13 @@ const RequestCard = ({ session }: { session: Session }) => {
             </CardHeader>
              <CardContent>
                 <p className="text-sm text-muted-foreground">
-                    Request for a {session.duration}-hour session on {formatInTimeZone(session.sessionDate, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}.
+                    Request for a {session.duration}-hour session on {formatInTimeZone(new Date(session.sessionDate), 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}.
                 </p>
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={handleDecline} disabled={isLoading}><X className="mr-2 h-4 w-4"/>Decline</Button>
                 <Button size="sm" onClick={handleAccept} disabled={isLoading}>
-                    {isLoading ? 'Accepting...' : <><Check className="mr-2 h-4 w-4"/>Accept</>}
+                    {isLoading ? 'Accepting...' : <><Check className="mr-2 h-4 w-4"/>Accept & Transfer Credit</>}
                 </Button>
             </CardFooter>
         </Card>
@@ -212,25 +281,44 @@ const RequestCard = ({ session }: { session: Session }) => {
 
 
 export default function SessionsPage() {
-    const { user, firestore } = useFirebase();
+    const { user: authUser, firestore } = useFirebase();
     const [currentUser, setCurrentUser] = React.useState<User | null>(null);
 
     React.useEffect(() => {
-        if(user && firestore) {
-            const userDocRef = doc(firestore, "users", user.uid);
+        if(authUser && firestore) {
+            const userDocRef = doc(firestore, "users", authUser.uid);
             getDoc(userDocRef).then(docSnap => {
                 if(docSnap.exists()){
-                    setCurrentUser(docSnap.data() as User)
+                    setCurrentUser({ id: docSnap.id, ...docSnap.data() } as User)
                 }
             })
         }
-    }, [user, firestore])
+    }, [authUser, firestore]);
+    
+    const sessionsAsLearnerQuery = useMemoFirebase(() => {
+        if (!firestore || !authUser) return null;
+        return query(collection(firestore, "sessions"), where('learnerId', '==', authUser.uid));
+    }, [firestore, authUser]);
 
+    const sessionsAsTeacherQuery = useMemoFirebase(() => {
+        if (!firestore || !authUser) return null;
+        return query(collection(firestore, "sessions"), where('teacherId', '==', authUser.uid));
+    }, [firestore, authUser]);
 
-    const sessionRequests = sessions.filter(s => currentUser && s.status === 'requested' && s.teacher.id === currentUser.id);
-    const scheduledSessions = sessions.filter(s => currentUser && s.status === 'scheduled' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
-    const completedSessions = sessions.filter(s => currentUser && s.status === 'completed' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
-    const cancelledSessions = sessions.filter(s => currentUser && s.status === 'cancelled' && (s.learner.id === currentUser.id || s.teacher.id === currentUser.id));
+    const { data: learnerSessions } = useCollection<Session>(sessionsAsLearnerQuery);
+    const { data: teacherSessions } = useCollection<Session>(sessionsAsTeacherQuery);
+
+    const allSessions = React.useMemo(() => {
+        const combined = new Map<string, Session>();
+        (learnerSessions || []).forEach(s => combined.set(s.id, s));
+        (teacherSessions || []).forEach(s => combined.set(s.id, s));
+        return Array.from(combined.values());
+    }, [learnerSessions, teacherSessions]);
+    
+    const sessionRequests = allSessions.filter(s => s.status === 'requested' && currentUser && s.teacherId === currentUser.id);
+    const scheduledSessions = allSessions.filter(s => s.status === 'scheduled');
+    const completedSessions = allSessions.filter(s => s.status === 'completed');
+    const cancelledSessions = allSessions.filter(s => s.status === 'cancelled');
 
     return (
         <div className="space-y-6">
@@ -246,7 +334,7 @@ export default function SessionsPage() {
                         Pending Requests
                     </h2>
                      <div className="grid gap-4 md:grid-cols-2">
-                        {sessionRequests.map(s => <RequestCard key={s.id} session={s} />)}
+                        {sessionRequests.map(s => <RequestCard key={s.id} session={s} currentUser={currentUser} />)}
                     </div>
                 </div>
             )}

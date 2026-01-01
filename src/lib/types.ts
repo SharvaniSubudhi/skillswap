@@ -26,8 +26,8 @@ export type User = {
 
 export type Session = {
   id: string;
-  teacher: User;
-  learner: User;
+  teacherId: string;
+  learnerId: string;
   skill: string;
   duration: number; // in hours
   creditsTransferred: number;
@@ -36,5 +36,5 @@ export type Session = {
   feedback?: string;
   rating?: number;
   disputeRaised: boolean;
-  sessionDate: Date;
+  sessionDate: any; // Can be Date or FieldValue
 };

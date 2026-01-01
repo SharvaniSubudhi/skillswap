@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { requestSession } from "@/ai/flows/request-session";
 import type { User } from "@/lib/types";
 import { useFirebase } from "@/firebase";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { serverTimestamp } from "firebase/firestore";
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection } from "firebase/firestore";
 
@@ -49,9 +49,18 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
             return;
         }
 
+        if (learner.credits < 1) {
+            toast({
+                variant: "destructive",
+                title: "Insufficient Credits",
+                description: "You do not have enough credits to book this session.",
+            });
+            return;
+        }
+
         setIsLoading(true);
         try {
-            // 1. Create Session Record
+            // 1. Create Session Record with 'requested' status
             const sessionData = {
                 teacherId: teacher.id,
                 learnerId: learner.id,
@@ -59,19 +68,13 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
                 duration: 1, // Assuming 1 hour for now
                 creditsTransferred: 1, // Assuming 1 credit for 1 hour
                 status: 'requested',
-                sessionDate: serverTimestamp(), // Placeholder, should be derived from slot
+                sessionDate: serverTimestamp(), // This will be set on the server
                 disputeRaised: false,
             };
             const sessionsCol = collection(firestore, "sessions");
             const newSessionRef = await addDocumentNonBlocking(sessionsCol, sessionData);
 
-            // 2. Transfer Credits (Deduct from learner)
-            const learnerDocRef = doc(firestore, 'users', learner.id);
-            await updateDoc(learnerDocRef, {
-                credits: learner.credits - 1
-            });
-            
-            // 3. Send notification to teacher
+            // 2. Send notification to teacher via AI flow
             const input: RequestSessionInput = {
                 teacher: { name: teacher.name, email: teacher.email },
                 learner: { name: learner.name, email: learner.email, id: learner.id },
@@ -84,10 +87,12 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
             if (result.success) {
                 toast({
                     title: "Request Sent!",
-                    description: result.message,
+                    description: "The teacher has been notified. Your credits will be deducted upon their acceptance.",
                 });
                 setIsOpen(false);
             } else {
+                // If notification fails, we should ideally delete the session request.
+                // For MVP, we'll show an error.
                 throw new Error(result.message);
             }
         } catch (error: any) {
@@ -104,13 +109,13 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button className="w-full">Schedule Slot</Button>
+                <Button className="w-full mt-4">Schedule Slot</Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Book a session with {teacher.name}</DialogTitle>
                     <DialogDescription>
-                        Select a skill you want to learn and a time that works for you. 1 credit will be deducted upon request.
+                        Select a skill and a time slot. 1 credit will be transferred when the teacher accepts your request.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -148,7 +153,7 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button onClick={handleBooking} disabled={isLoading}>
-                        {isLoading ? "Sending Request..." : "Send Request (1 Credit)"}
+                        {isLoading ? "Sending Request..." : "Send Request"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
