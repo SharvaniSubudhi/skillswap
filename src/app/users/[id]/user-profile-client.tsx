@@ -16,17 +16,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { requestSession } from "@/ai/flows/request-session";
-import type { User } from "@/lib/types";
+import type { User, Session } from "@/lib/types";
 import { useFirebase, useDoc, useMemoFirebase } from "@/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, updateDoc, serverTimestamp } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
+import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 
 type RequestSessionInput = {
     teacher: { name: string, email: string };
-    learner: { name: string, email: string };
+    learner: { name: string, email: string, id: string };
     skill: string;
     sessionDetails: string;
+    sessionId: string;
 };
 
 
@@ -35,7 +37,8 @@ const getInitials = (name: string) => {
     return names.length > 1 ? `${names[0][0]}${names[names.length - 1][0]}` : name.substring(0, 2);
 };
 
-function BookSessionDialog({ user, currentUser }: { user: User, currentUser: User | null }) {
+function BookSessionDialog({ user: teacher, currentUser: learner }: { user: User, currentUser: User | null }) {
+    const { firestore } = useFirebase();
     const [isOpen, setIsOpen] = React.useState(false);
     const [selectedSkill, setSelectedSkill] = React.useState('');
     const [selectedSlot, setSelectedSlot] = React.useState('');
@@ -52,7 +55,7 @@ function BookSessionDialog({ user, currentUser }: { user: User, currentUser: Use
             return;
         }
 
-        if (!currentUser) {
+        if (!learner || !firestore) {
              toast({
                 variant: "destructive",
                 title: "Not Authenticated",
@@ -63,11 +66,33 @@ function BookSessionDialog({ user, currentUser }: { user: User, currentUser: Use
 
         setIsLoading(true);
         try {
+            // 1. Create Session Record
+            const sessionData = {
+                teacherId: teacher.id,
+                learnerId: learner.id,
+                skill: selectedSkill,
+                duration: 1, // Assuming 1 hour for now
+                creditsTransferred: 1, // Assuming 1 credit for 1 hour
+                status: 'requested',
+                sessionDate: serverTimestamp(), // Placeholder, should be derived from slot
+                disputeRaised: false,
+            };
+            const sessionsCol = collection(firestore, "sessions");
+            const newSessionRef = await addDocumentNonBlocking(sessionsCol, sessionData);
+
+            // 2. Transfer Credits (Deduct from learner)
+            const learnerDocRef = doc(firestore, 'users', learner.id);
+            await updateDoc(learnerDocRef, {
+                credits: learner.credits - 1
+            });
+            
+            // 3. Send notification to teacher
             const input: RequestSessionInput = {
-                teacher: { name: user.name, email: user.email },
-                learner: { name: currentUser.name, email: currentUser.email },
+                teacher: { name: teacher.name, email: teacher.email },
+                learner: { name: learner.name, email: learner.email, id: learner.id },
                 skill: selectedSkill,
                 sessionDetails: selectedSlot,
+                sessionId: newSessionRef.id
             };
 
             const result = await requestSession(input);
@@ -76,7 +101,6 @@ function BookSessionDialog({ user, currentUser }: { user: User, currentUser: Use
                     title: "Request Sent!",
                     description: result.message,
                 });
-                // In a real app, you would update the state to show the new 'requested' session.
                 setIsOpen(false);
             } else {
                 throw new Error(result.message);
@@ -99,9 +123,9 @@ function BookSessionDialog({ user, currentUser }: { user: User, currentUser: Use
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Book a session with {user.name}</DialogTitle>
+                    <DialogTitle>Book a session with {teacher.name}</DialogTitle>
                     <DialogDescription>
-                        Select a skill you want to learn and a time that works for you.
+                        Select a skill you want to learn and a time that works for you. 1 credit will be deducted upon request.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -112,7 +136,7 @@ function BookSessionDialog({ user, currentUser }: { user: User, currentUser: Use
                                 <SelectValue placeholder="Select a skill..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {user.skillsKnown.map(skill => (
+                                {teacher.skillsKnown.map(skill => (
                                     <SelectItem key={skill.skillName} value={skill.skillName}>{skill.skillName}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -125,7 +149,7 @@ function BookSessionDialog({ user, currentUser }: { user: User, currentUser: Use
                                 <SelectValue placeholder="Select a time slot..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {user.availability.map(slot => (
+                                {teacher.availability.map(slot => (
                                     <SelectItem key={`${slot.day}-${slot.timeSlot}`} value={`${slot.day} at ${slot.timeSlot}`}>
                                         {slot.day} - {slot.timeSlot}
                                     </SelectItem>
@@ -139,7 +163,7 @@ function BookSessionDialog({ user, currentUser }: { user: User, currentUser: Use
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button onClick={handleBooking} disabled={isLoading}>
-                        {isLoading ? "Sending Request..." : "Send Request"}
+                        {isLoading ? "Sending Request..." : "Send Request (1 Credit)"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -166,7 +190,7 @@ export function UserProfileClient({ userId }: { userId: string }) {
             const userDocRef = doc(firestore, "users", authUser.uid);
             getDoc(userDocRef).then(docSnap => {
                 if(docSnap.exists()){
-                    setCurrentUser(docSnap.data() as User)
+                    setCurrentUser({...(docSnap.data() as Omit<User, 'id'>), id: docSnap.id})
                 }
             })
         }

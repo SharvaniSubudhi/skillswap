@@ -45,18 +45,19 @@ const sendEmail = ai.defineTool(
 // Input schema for the main flow
 const RequestSessionInputSchema = z.object({
   teacher: z.object({ name: z.string(), email: z.string().email() }),
-  learner: z.object({ name: z.string(), email: z.string().email() }),
+  learner: z.object({ name: z.string(), email: z.string().email(), id: z.string() }),
   skill: z.string(),
   sessionDetails: z.string().describe('The day and time slot for the session.'),
+  sessionId: z.string(),
 });
-type RequestSessionInput = z.infer<typeof RequestSessionInputSchema>;
+export type RequestSessionInput = z.infer<typeof RequestSessionInputSchema>;
 
 // Output schema for the main flow
 const RequestSessionOutputSchema = z.object({
   success: z.boolean(),
   message: z.string(),
 });
-type RequestSessionOutput = z.infer<typeof RequestSessionOutputSchema>;
+export type RequestSessionOutput = z.infer<typeof RequestSessionOutputSchema>;
 
 // The main flow for requesting a session
 const requestSessionFlow = ai.defineFlow(
@@ -67,14 +68,14 @@ const requestSessionFlow = ai.defineFlow(
     tools: [sendEmail],
   },
   async (input) => {
-    const { teacher, learner, skill, sessionDetails } = input;
+    const { teacher, learner, skill, sessionDetails, sessionId } = input;
 
     const emailBody = `
       <h1>New SkillSwap Session Request!</h1>
       <p><strong>${learner.name}</strong> has requested a session with you.</p>
       <p><strong>Skill:</strong> ${skill}</p>
       <p><strong>When:</strong> ${sessionDetails}</p>
-      <p>Please log in to your SkillSwap dashboard to accept or decline this request.</p>
+      <p>Please log in to your SkillSwap dashboard to accept or decline this request (Session ID: ${sessionId}).</p>
       <p><em>(In a real app, this email would contain unique accept/decline links that trigger an API.)</em></p>
     `;
 
@@ -94,3 +95,5 @@ const requestSessionFlow = ai.defineFlow(
 export async function requestSession(input: RequestSessionInput): Promise<RequestSessionOutput> {
     return requestSessionFlow(input);
 }
+
+    
