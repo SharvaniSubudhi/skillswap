@@ -324,7 +324,7 @@ export default function SessionsPage() {
     }, [firestore, authUser]);
 
     const { data: learnerSessions } = useCollection<Session>(sessionsAsLearnerQuery);
-    const { data: teacherSessions } = useCollection<Session>(teacherSessionsQuery);
+    const { data: teacherSessions } = useCollection<Session>(sessionsAsTeacherQuery);
 
     const allSessions = React.useMemo(() => {
         const combined = new Map<string, Session>();
