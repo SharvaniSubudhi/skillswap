@@ -209,7 +209,7 @@ export default function ProfilePage() {
                             </div>
                         </div>
                         <div className="mt-4 flex flex-wrap justify-center gap-2">
-                            {(userProfile?.badges || []).map((badge: string) => (
+                            {userProfile && (userProfile?.badges || []).map((badge: string) => (
                                 <Badge key={badge} variant="secondary" className="gap-1">
                                     <Award className="w-3 h-3"/> {badge}
                                 </Badge>
@@ -473,3 +473,5 @@ export default function ProfilePage() {
         </form>
     );
 }
+
+    
