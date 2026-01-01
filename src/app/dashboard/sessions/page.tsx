@@ -26,6 +26,7 @@ type CreateSessionInput = {
 
 
 const getInitials = (name: string) => {
+    if (!name) return '';
     const names = name.split(' ');
     return names.length > 1 ? `${names[0][0]}${names[names.length - 1][0]}` : name.substring(0, 2);
 };
@@ -61,6 +62,14 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
         }
     }, [firestore, session]);
 
+    const getFormattedDate = () => {
+        if (!session.sessionDate) return "Date not set";
+        // Firestore timestamps have a toDate() method.
+        const date = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
+        if (isNaN(date.getTime())) return "Invalid date";
+        return formatInTimeZone(date, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
+    }
+
     if (!teacher || !learner) return null; // Or a loading skeleton
     
     const otherUser = isTeacher ? learner : teacher;
@@ -77,11 +86,12 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
         });
 
         try {
+            const sessionDate = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
             const input: CreateSessionInput = {
                 teacher: { name: teacher.name, email: teacher.email },
                 learner: { name: learner.name, email: learner.email },
                 skill: session.skill,
-                sessionDate: new Date(session.sessionDate).toISOString(),
+                sessionDate: sessionDate.toISOString(),
                 duration: session.duration,
             };
             const result = await createSession(input);
@@ -116,7 +126,7 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
                     <div>
                         <CardTitle className="font-headline text-lg">{session.skill}</CardTitle>
                         <CardDescription>
-                            {formatInTimeZone(new Date(session.sessionDate), 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}
+                            {getFormattedDate()}
                         </CardDescription>
                     </div>
                     <Badge className={`${statusColors[session.status]} border-0 capitalize`}>{session.status}</Badge>
@@ -179,6 +189,13 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
         }
     }, [firestore, session]);
 
+    const getFormattedDate = () => {
+        if (!session.sessionDate) return "Date not set";
+        // Firestore timestamps might not be converted to Date objects yet.
+        const date = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
+        if (isNaN(date.getTime())) return "Invalid date";
+        return formatInTimeZone(date, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
+    }
 
     const handleAccept = async () => {
          if (!firestore || !learner || !teacher) return;
@@ -205,11 +222,12 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
             await batch.commit();
 
             // 2. Create calendar event and send notification
+            const sessionDate = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
             const input: CreateSessionInput = {
                 teacher: { name: teacher.name, email: teacher.email },
                 learner: { name: learner.name, email: learner.email },
                 skill: session.skill,
-                sessionDate: new Date(session.sessionDate).toISOString(),
+                sessionDate: sessionDate.toISOString(),
                 duration: session.duration,
             };
             const result = await createSession(input);
@@ -266,7 +284,7 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
             </CardHeader>
              <CardContent>
                 <p className="text-sm text-muted-foreground">
-                    Request for a {session.duration}-hour session on {formatInTimeZone(new Date(session.sessionDate), 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz")}.
+                    Request for a {session.duration}-hour session on {getFormattedDate()}.
                 </p>
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
@@ -306,7 +324,7 @@ export default function SessionsPage() {
     }, [firestore, authUser]);
 
     const { data: learnerSessions } = useCollection<Session>(sessionsAsLearnerQuery);
-    const { data: teacherSessions } = useCollection<Session>(sessionsAsTeacherQuery);
+    const { data: teacherSessions } = useCollection<Session>(teacherSessionsQuery);
 
     const allSessions = React.useMemo(() => {
         const combined = new Map<string, Session>();
