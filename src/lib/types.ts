@@ -39,13 +39,3 @@ export type Session = {
   disputeRaised: boolean;
   sessionDate: Date;
 };
-
-export type Dispute = {
-    id: string;
-    sessionId: string;
-    raisedBy: string; // user id
-    reason: string;
-    status: 'open' | 'resolved' | 'rejected';
-    resolution?: string;
-    createdAt: Date;
-}

@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -25,14 +26,6 @@ service cloud.firestore {
       allow create: if isSignedIn();
       // Allow update if the user is the teacher or learner
       allow update: if isSignedIn() && (resource.data.teacherId == request.auth.uid || resource.data.learnerId == request.auth.uid);
-    }
-
-    // Rules for the 'disputes' collection
-    match /disputes/{disputeId} {
-      // Allow a user to read a dispute if they raised it
-      allow read: if isSignedIn() && resource.data.raisedBy == request.auth.uid;
-       // Allow any signed-in user to create a dispute
-      allow create: if isSignedIn();
     }
   }
 }

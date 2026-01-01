@@ -3,7 +3,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, User, CalendarClock, Gem, ShieldAlert } from "lucide-react"
+import { LayoutDashboard, User, CalendarClock, Gem } from "lucide-react"
 
 import {
   SidebarMenu,
@@ -32,11 +32,6 @@ export function MainNav() {
         label: "Credits",
         icon: Gem,
       },
-    {
-        href: "/dashboard/disputes",
-        label: "Disputes",
-        icon: ShieldAlert,
-    },
     {
       href: "/dashboard/profile",
       label: "My Profile",
