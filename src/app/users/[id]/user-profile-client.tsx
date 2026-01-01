@@ -32,7 +32,7 @@ type RequestSessionInput = {
 };
 
 
-const getInitials = (name: string) => {
+const getInitials = (name: string = "") => {
     const names = name.split(' ');
     return names.length > 1 ? `${names[0][0]}${names[names.length - 1][0]}` : name.substring(0, 2);
 };
@@ -255,11 +255,12 @@ export function UserProfileClient({ userId }: { userId: string }) {
                                     <div className="mt-4 space-y-3">
                                         {user.skillsKnown.map(skill => (
                                             <div key={skill.skillName} className="flex items-center gap-2 p-3 bg-secondary rounded-lg">
-                                                <Verified className="w-4 h-4 text-green-500" />
+                                                {skill.isVerified ? <Verified className="w-4 h-4 text-green-500" /> : <Verified className="w-4 h-4 text-muted-foreground/50" />}
                                                 <span className="font-medium">{skill.skillName}</span>
                                                 <Badge variant="outline" className="capitalize">{skill.level}</Badge>
                                             </div>
                                         ))}
+                                        {user.skillsKnown.length === 0 && <p className="text-xs text-muted-foreground text-center">No skills to teach yet.</p>}
                                     </div>
                                 </div>
                                 <div className="pt-6 border-t">
@@ -270,6 +271,7 @@ export function UserProfileClient({ userId }: { userId: string }) {
                                                <span className="font-medium">{skill.skillName}</span>
                                             </div>
                                         ))}
+                                        {user.skillsWanted.length === 0 && <p className="text-xs text-muted-foreground text-center">No skills to learn yet.</p>}
                                     </div>
                                 </div>
                              </div>
@@ -285,6 +287,7 @@ export function UserProfileClient({ userId }: { userId: string }) {
                                             <span className="text-muted-foreground">{slot.timeSlot}</span>
                                         </div>
                                     ))}
+                                    {user.availability.length === 0 && <p className="text-xs text-muted-foreground text-center pt-4">No available slots.</p>}
                                 </div>
                             </div>
                         </TabsContent>

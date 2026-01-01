@@ -9,12 +9,12 @@ export const users: User[] = [
     name: 'Anika Sharma',
     email: 'anika.sharma@edu.in',
     skillsKnown: [
-      { skillName: 'Python', level: 'advanced' },
-      { skillName: 'Data Analysis', level: 'intermediate' },
+      { skillName: 'Python', level: 'advanced', isVerified: true },
+      { skillName: 'Data Analysis', level: 'intermediate', isVerified: false },
     ],
     skillsWanted: [
-      { skillName: 'React', level: 'basic' },
-      { skillName: 'Graphic Design', level: 'basic' },
+      { skillName: 'React' },
+      { skillName: 'Graphic Design' },
     ],
     credits: 10,
     availability: [
@@ -31,11 +31,11 @@ export const users: User[] = [
     name: 'Rohan Verma',
     email: 'rohan.verma@edu.in',
     skillsKnown: [
-      { skillName: 'React', level: 'advanced' },
-      { skillName: 'Node.js', level: 'advanced' },
+      { skillName: 'React', level: 'advanced', isVerified: true },
+      { skillName: 'Node.js', level: 'advanced', isVerified: true },
     ],
     skillsWanted: [
-      { skillName: 'Python', level: 'intermediate' },
+      { skillName: 'Python' },
     ],
     credits: 5,
     availability: [
@@ -52,11 +52,11 @@ export const users: User[] = [
     name: 'Priya Singh',
     email: 'priya.singh@edu.in',
     skillsKnown: [
-      { skillName: 'Graphic Design', level: 'advanced' },
-      { skillName: 'UI/UX Principles', level: 'intermediate' },
+      { skillName: 'Graphic Design', level: 'advanced', isVerified: true },
+      { skillName: 'UI/UX Principles', level: 'intermediate', isVerified: false },
     ],
     skillsWanted: [
-      { skillName: 'Photography', level: 'basic' },
+      { skillName: 'Photography' },
     ],
     credits: 3,
     availability: [
@@ -72,11 +72,11 @@ export const users: User[] = [
     name: 'Vikram Mehta',
     email: 'vikram.mehta@edu.in',
     skillsKnown: [
-      { skillName: 'Photography', level: 'advanced' },
-      { skillName: 'Video Editing', level: 'intermediate' },
+      { skillName: 'Photography', level: 'advanced', isVerified: false },
+      { skillName: 'Video Editing', level: 'intermediate', isVerified: false },
     ],
     skillsWanted: [
-      { skillName: 'Data Analysis', level: 'basic' },
+      { skillName: 'Data Analysis' },
     ],
     credits: 8,
     availability: [
@@ -93,11 +93,11 @@ export const users: User[] = [
     name: 'Sameer Khan',
     email: 'sameer.khan@edu.in',
     skillsKnown: [
-        { skillName: 'Public Speaking', level: 'advanced' },
-        { skillName: 'Content Writing', level: 'intermediate' },
+        { skillName: 'Public Speaking', level: 'advanced', isVerified: true },
+        { skillName: 'Content Writing', level: 'intermediate', isVerified: false },
     ],
     skillsWanted: [
-        { skillName: 'Node.js', level: 'basic' },
+        { skillName: 'Node.js' },
     ],
     credits: 4,
     availability: [
@@ -113,11 +113,11 @@ export const users: User[] = [
     name: 'Neha Reddy',
     email: 'neha.reddy@edu.in',
     skillsKnown: [
-        { skillName: 'Java', level: 'advanced' },
-        { skillName: 'Spring Boot', level: 'intermediate' },
+        { skillName: 'Java', level: 'advanced', isVerified: true },
+        { skillName: 'Spring Boot', level: 'intermediate', isVerified: false },
     ],
     skillsWanted: [
-        { skillName: 'React', level: 'intermediate' },
+        { skillName: 'React' },
     ],
     credits: 7,
     availability: [

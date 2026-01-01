@@ -10,8 +10,9 @@ import Link from "next/link"
 import { Star, ArrowRight } from "lucide-react"
 import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
 import React from "react";
-import { collection, query, where, documentId } from "firebase/firestore";
+import { collection, query, where, documentId, doc, getDoc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getRecommendations } from "@/ai/flows/get-recommendations";
 
 const getInitials = (name: string) => {
     const names = name.split(' ')
@@ -40,12 +41,25 @@ function UserCard({ user }: { user: User }) {
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
-        <CardDescription>Teaches:</CardDescription>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {user.skillsKnown?.slice(0, 3).map((skill) => (
-            <Badge key={skill.skillName} variant="secondary">{skill.skillName}</Badge>
-          ))}
-           {user.skillsKnown?.length === 0 && <p className="text-xs text-muted-foreground">No skills to teach yet.</p>}
+        <div className="space-y-3">
+          <div>
+            <CardDescription>Teaches:</CardDescription>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {user.skillsKnown?.slice(0, 3).map((skill) => (
+                <Badge key={skill.skillName} variant={skill.isVerified ? "default" : "secondary"}>{skill.skillName}</Badge>
+              ))}
+              {user.skillsKnown?.length === 0 && <p className="text-xs text-muted-foreground">No skills to teach yet.</p>}
+            </div>
+          </div>
+          <div>
+            <CardDescription>Wants to Learn:</CardDescription>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {user.skillsWanted?.slice(0, 3).map((skill) => (
+                <Badge key={skill.skillName} variant="outline">{skill.skillName}</Badge>
+              ))}
+              {user.skillsWanted?.length === 0 && <p className="text-xs text-muted-foreground">No skills to learn yet.</p>}
+            </div>
+          </div>
         </div>
       </CardContent>
       <CardFooter>
@@ -85,24 +99,63 @@ function UserCardSkeleton() {
 
 export default function DashboardPage() {
   const { user: authUser, firestore } = useFirebase();
+  const [currentUser, setCurrentUser] = React.useState<User | null>(null);
+  const [recommendedUsers, setRecommendedUsers] = React.useState<User[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   const usersQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, "users");
   }, [firestore]);
 
-  const { data: users, isLoading } = useCollection<User>(usersQuery);
+  const { data: allUsers } = useCollection<User>(usersQuery);
 
-  const recommendedUsers = React.useMemo(() => {
-    if (!users || !authUser) return [];
-    return users.filter(u => u.id !== authUser.uid);
-  }, [users, authUser]);
+  React.useEffect(() => {
+    if (authUser && firestore) {
+      const userDocRef = doc(firestore, "users", authUser.uid);
+      getDoc(userDocRef).then((docSnap) => {
+        if (docSnap.exists()) {
+          setCurrentUser({ id: docSnap.id, ...docSnap.data() } as User);
+        }
+      });
+    }
+  }, [authUser, firestore]);
+
+  React.useEffect(() => {
+    async function fetchRecommendations() {
+      if (currentUser && allUsers && allUsers.length > 0) {
+        setIsLoading(true);
+        try {
+          const allOtherUsers = allUsers.filter(u => u.id !== currentUser.id);
+          const recommendations = await getRecommendations({ currentUser, allUsers: allOtherUsers });
+          setRecommendedUsers(recommendations);
+        } catch (error) {
+          console.error("Failed to get recommendations:", error);
+          // Fallback to simple filtering if AI fails
+          setRecommendedUsers(allUsers.filter(u => u.id !== currentUser.id));
+        } finally {
+          setIsLoading(false);
+        }
+      } else if (allUsers) {
+        // If no current user, just show all other users
+        setRecommendedUsers(allUsers.filter(u => u.id !== authUser?.uid));
+        setIsLoading(false);
+      }
+    }
+
+    if (currentUser) {
+        fetchRecommendations();
+    } else if (allUsers) {
+        // Handle case where authUser is loaded but currentUser profile is not yet fetched
+        setIsLoading(false);
+    }
+  }, [currentUser, allUsers, authUser]);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold font-headline">Discover Matches</h1>
-        <p className="text-muted-foreground">Find peers from your university to learn from and teach.</p>
+        <p className="text-muted-foreground">AI-powered recommendations for your learning journey.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -113,7 +166,10 @@ export default function DashboardPage() {
           <UserCard key={user.id} user={user} />
         ))}
          {!isLoading && recommendedUsers.length === 0 && (
-            <p className="text-center text-muted-foreground py-12 col-span-full">No other users found.</p>
+            <div className="text-center text-muted-foreground py-12 col-span-full">
+              <p>No recommendations found.</p>
+              <p className="text-sm">Try adding skills you want to learn in your profile!</p>
+            </div>
         )}
       </div>
     </div>

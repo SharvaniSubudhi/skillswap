@@ -16,7 +16,8 @@
             "type": "object",
             "properties": {
               "skillName": { "type": "string" },
-              "level": { "type": "string", "enum": ["basic", "intermediate", "advanced"] }
+              "level": { "type": "string", "enum": ["basic", "intermediate", "advanced"] },
+              "isVerified": { "type": "boolean" }
             },
             "required": ["skillName", "level"]
           },

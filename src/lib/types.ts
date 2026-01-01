@@ -15,7 +15,7 @@ export type User = {
   name: string;
   email: string;
   skillsKnown: Skill[];
-  skillsWanted: Skill[];
+  skillsWanted: { skillName: string; }[];
   credits: number;
   availability: Availability[];
   rating: number; // e.g., 4.5
