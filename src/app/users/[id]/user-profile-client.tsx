@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Gem, Star, Award, Verified, Calendar, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +35,7 @@ const getInitials = (name: string) => {
     return names.length > 1 ? `${names[0][0]}${names[names.length - 1][0]}` : name.substring(0, 2);
 };
 
-function BookSessionDialog({ user, currentUser, children }: { user: User, currentUser: User | null, children: React.ReactNode }) {
+function BookSessionDialog({ user, currentUser }: { user: User, currentUser: User | null }) {
     const [isOpen, setIsOpen] = React.useState(false);
     const [selectedSkill, setSelectedSkill] = React.useState('');
     const [selectedSlot, setSelectedSlot] = React.useState('');
@@ -94,7 +94,9 @@ function BookSessionDialog({ user, currentUser, children }: { user: User, curren
     
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <div onClick={() => setIsOpen(true)}>{children}</div>
+            <DialogTrigger asChild>
+                <Button className="mt-6 w-full">Book Session</Button>
+            </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Book a session with {user.name}</DialogTitle>
@@ -211,9 +213,7 @@ export function UserProfileClient({ userId }: { userId: string }) {
                                 </Badge>
                             ))}
                         </div>
-                         <BookSessionDialog user={user} currentUser={currentUser}>
-                            <Button className="mt-6 w-full">Book Session</Button>
-                        </BookSessionDialog>
+                         <BookSessionDialog user={user} currentUser={currentUser} />
                     </CardContent>
                 </Card>
 
@@ -304,3 +304,5 @@ export function UserProfileClient({ userId }: { userId: string }) {
         </div>
     );
 }
+
+    
