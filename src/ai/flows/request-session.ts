@@ -9,38 +9,10 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
-// Schema for sending an email
-const SendEmailInputSchema = z.object({
-  to: z.string().email().describe("The recipient's email address."),
-  subject: z.string().describe('The subject of the email.'),
-  body: z.string().describe('The HTML body of the email.'),
-});
-
-// Tool to "send" an email (logs to console for this example)
-const sendEmail = ai.defineTool(
-  {
-    name: 'sendSessionRequestEmail',
-    description: 'Sends an email notification for a session request.',
-    inputSchema: SendEmailInputSchema,
-    outputSchema: z.object({
-      success: z.boolean(),
-      message: z.string(),
-    }),
-  },
-  async (input) => {
-    // In a real app, you would integrate a transactional email service.
-    console.log('--- SENDING SESSION REQUEST EMAIL ---');
-    console.log('To:', input.to);
-    console.log('Subject:', input.subject);
-    console.log('Body:', input.body);
-    console.log('---------------------------------');
-
-    return {
-      success: true,
-      message: `Session request email sent to ${input.to}`,
-    };
-  }
-);
+// This file is now simplified. The email sending logic is removed
+// as it requires a proper transactional email service setup which is beyond
+// the scope of this example. The front-end will handle the creation of the
+// 'requested' session document directly.
 
 // Input schema for the main flow
 const RequestSessionInputSchema = z.object({
@@ -65,29 +37,19 @@ const requestSessionFlow = ai.defineFlow(
     name: 'requestSessionFlow',
     inputSchema: RequestSessionInputSchema,
     outputSchema: RequestSessionOutputSchema,
-    tools: [sendEmail],
   },
   async (input) => {
-    const { teacher, learner, skill, sessionDetails, sessionId } = input;
-
-    const emailBody = `
-      <h1>New SkillSwap Session Request!</h1>
-      <p><strong>${learner.name}</strong> has requested a session with you.</p>
-      <p><strong>Skill:</strong> ${skill}</p>
-      <p><strong>When:</strong> ${sessionDetails}</p>
-      <p>Please log in to your SkillSwap dashboard to accept or decline this request (Session ID: ${sessionId}).</p>
-      <p><em>(In a real app, this email would contain unique accept/decline links that trigger an API.)</em></p>
-    `;
-
-    await sendEmail({
-      to: teacher.email,
-      subject: `New SkillSwap Request from ${learner.name} for ${skill}`,
-      body: emailBody,
-    });
+    // The email tool has been removed. 
+    // In a real application, you would integrate a service like SendGrid here.
+    console.log(`--- SESSION REQUEST (ID: ${input.sessionId}) ---`);
+    console.log(`From: ${input.learner.name} (${input.learner.email})`);
+    console.log(`To: ${input.teacher.name} (${input.teacher.email})`);
+    console.log(`Skill: ${input.skill} at ${input.sessionDetails}`);
+    console.log('---------------------------------');
 
     return {
       success: true,
-      message: 'Session requested successfully. The teacher has been notified.',
+      message: 'Session requested successfully. The teacher has been notified (simulation).',
     };
   }
 );
@@ -95,5 +57,3 @@ const requestSessionFlow = ai.defineFlow(
 export async function requestSession(input: RequestSessionInput): Promise<RequestSessionOutput> {
     return requestSessionFlow(input);
 }
-
-    

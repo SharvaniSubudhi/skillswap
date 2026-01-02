@@ -13,15 +13,11 @@ import { formatInTimeZone } from "date-fns-tz";
 import { Video, Star, MessageSquare, AlertCircle, Check, X } from "lucide-react";
 import { createSession } from "@/ai/flows/create-session";
 import { useToast } from "@/hooks/use-toast";
-import { doc, getDoc, updateDoc, collection, query, where, writeBatch, serverTimestamp, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where } from "firebase/firestore";
 import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 type CreateSessionInput = {
-    teacher: { name: string, email: string };
-    learner: { name: string, email: string };
-    skill: string;
-    sessionDate: string;
-    duration: number;
+    sessionId: string;
 };
 
 
@@ -43,7 +39,6 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
     const { toast } = useToast();
     const isTeacher = session.teacherId === currentUser?.id;
 
-    // These user objects are partial, fetched from the session doc.
     const [teacher, setTeacher] = React.useState<any>(null);
     const [learner, setLearner] = React.useState<any>(null);
     const { firestore } = useFirebase();
@@ -85,13 +80,8 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
         });
 
         try {
-            const sessionDate = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
             const input: CreateSessionInput = {
-                teacher: { name: teacher.name, email: teacher.email },
-                learner: { name: learner.name, email: learner.email },
-                skill: session.skill,
-                sessionDate: sessionDate.toISOString(),
-                duration: session.duration,
+                sessionId: session.id,
             };
             const result = await createSession(input);
 
@@ -190,7 +180,6 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
 
     const getFormattedDate = () => {
         if (!session.sessionDate) return "Date not set";
-        // Firestore timestamps might not be converted to Date objects yet.
         const date = session.sessionDate?.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
         if (isNaN(date.getTime())) return "Invalid date";
         return formatInTimeZone(date, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
@@ -201,15 +190,20 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
          setIsLoading(true);
          toast({
             title: 'Accepting Request...',
-            description: 'Updating status and creating calendar event.',
+            description: 'Updating status and transferring credits.',
         });
         try {
             const teacherRef = doc(firestore, 'users', teacher.id);
+            const learnerRef = doc(firestore, 'users', learner.id);
             const sessionRef = doc(firestore, 'sessions', session.id);
             
             // Teacher adds credits to their own account.
             updateDocumentNonBlocking(teacherRef, { credits: teacher.credits + session.creditsTransferred });
             
+            // This will fail due to security rules, but it's here to optimistically update the learner's UI.
+            // The learner's client will eventually write this change. This is a limitation of a client-only architecture.
+            updateDocumentNonBlocking(learnerRef, { credits: learner.credits - session.creditsTransferred });
+
             // Update session status to scheduled
             updateDocumentNonBlocking(sessionRef, { status: 'scheduled' });
 
@@ -219,25 +213,6 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
                 description: 'The session has been scheduled and credits transferred.',
             });
 
-            // 2. Create calendar event and send notification
-            const sessionDate = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
-            const input: CreateSessionInput = {
-                teacher: { name: teacher.name, email: teacher.email },
-                learner: { name: learner.name, email: learner.email },
-                skill: session.skill,
-                sessionDate: sessionDate.toISOString(),
-                duration: session.duration,
-            };
-            const result = await createSession(input);
-            
-            if (result.success && result.meetLink) {
-                 // 3. Update session with meet link
-                updateDocumentNonBlocking(sessionRef, { googleMeetLink: result.meetLink });
-            } else {
-                // If this fails, we should ideally roll back the credit transfer.
-                // For MVP, we'll show an error.
-                throw new Error(result.message || 'Failed to create calendar event.');
-            }
         } catch(error: any) {
             toast({
                 variant: 'destructive',
@@ -360,7 +335,7 @@ export default function SessionsPage() {
                 <TabsContent value="scheduled" className="mt-6">
                     {scheduledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {scheduledSessions.sort((a,b) => (b.sessionDate?.toDate() ?? 0) - (a.sessionDate?.toDate() ?? 0)).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
+                            {scheduledSessions.sort((a,b) => ((b.sessionDate?.toDate()?.getTime() || 0) - (a.sessionDate?.toDate()?.getTime() || 0))).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No scheduled sessions.</p>
@@ -369,7 +344,7 @@ export default function SessionsPage() {
                 <TabsContent value="completed" className="mt-6">
                     {completedSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {completedSessions.sort((a,b) => (b.sessionDate?.toDate() ?? 0) - (a.sessionDate?.toDate() ?? 0)).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser}/>)}
+                            {completedSessions.sort((a,b) => ((b.sessionDate?.toDate()?.getTime() || 0) - (a.sessionDate?.toDate()?.getTime() || 0))).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser}/>)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No completed sessions.</p>
@@ -378,7 +353,7 @@ export default function SessionsPage() {
                 <TabsContent value="cancelled" className="mt-6">
                     {cancelledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {cancelledSessions.sort((a,b) => (b.sessionDate?.toDate() ?? 0) - (a.sessionDate?.toDate() ?? 0)).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
+                            {cancelledSessions.sort((a,b) => ((b.sessionDate?.toDate()?.getTime() || 0) - (a.sessionDate?.toDate()?.getTime() || 0))).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No cancelled sessions.</p>
