@@ -10,9 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { requestSession } from "@/ai/flows/request-session";
 import type { User } from "@/lib/types";
 import { useFirebase } from "@/firebase";
-import { serverTimestamp } from "firebase/firestore";
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { collection } from "firebase/firestore";
+import { getNextOccurrence } from "@/lib/date-utils";
 
 type RequestSessionInput = {
     teacher: { name: string, email: string };
@@ -60,7 +60,11 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
 
         setIsLoading(true);
         try {
-            // 1. Create Session Record with 'requested' status
+            // 1. Calculate the correct session date from the selected slot
+            const [day, time] = selectedSlot.split(' at ');
+            const sessionDate = getNextOccurrence(day, time.split(' - ')[0]);
+
+            // 2. Create Session Record with 'requested' status and the correct future date
             const sessionData = {
                 teacherId: teacher.id,
                 learnerId: learner.id,
@@ -68,13 +72,13 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
                 duration: 1, // Assuming 1 hour for now
                 creditsTransferred: 1, // Assuming 1 credit for 1 hour
                 status: 'requested',
-                sessionDate: serverTimestamp(), // This will be set on the server
+                sessionDate: sessionDate, // Use the calculated future date
                 disputeRaised: false,
             };
             const sessionsCol = collection(firestore, "sessions");
             const newSessionRef = await addDocumentNonBlocking(sessionsCol, sessionData);
 
-            // 2. Send notification to teacher via AI flow
+            // 3. Send notification to teacher via AI flow
             const input: RequestSessionInput = {
                 teacher: { name: teacher.name, email: teacher.email },
                 learner: { name: learner.name, email: learner.email, id: learner.id },

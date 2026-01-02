@@ -36,7 +36,6 @@ const statusColors = {
 
 
 const SessionCard = ({ session, currentUser }: { session: Session, currentUser: User | null }) => {
-    const { toast } = useToast();
     const isTeacher = session.teacherId === currentUser?.id;
 
     const [teacher, setTeacher] = React.useState<any>(null);
@@ -71,39 +70,8 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
     const handleJoinNow = async () => {
         if (session.googleMeetLink) {
             window.open(session.googleMeetLink, '_blank');
-            return;
-        }
-
-        toast({
-            title: 'Creating Google Meet link...',
-            description: 'Please wait a moment.',
-        });
-
-        try {
-            const input: CreateSessionInput = {
-                sessionId: session.id,
-            };
-            const result = await createSession(input);
-
-            if (result.success && result.meetLink) {
-                // Update session doc with the meet link
-                const sessionRef = doc(firestore, 'sessions', session.id);
-                updateDocumentNonBlocking(sessionRef, { googleMeetLink: result.meetLink });
-
-                toast({
-                    title: 'Meet link created!',
-                    description: 'Redirecting you to the meeting.',
-                });
-                window.open(result.meetLink, '_blank');
-            } else {
-                throw new Error(result.message || 'Failed to create Meet link.');
-            }
-        } catch (error: any) {
-            toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: error.message || 'Could not create the Google Meet link.',
-            });
+        } else {
+            alert("The Google Meet link for this session has not been generated yet. This typically happens when the teacher accepts the request.");
         }
     };
 
@@ -190,22 +158,31 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
          setIsLoading(true);
          toast({
             title: 'Accepting Request...',
-            description: 'Updating status and transferring credits.',
+            description: 'Transferring credits and generating Meet link.',
         });
         try {
-            const teacherRef = doc(firestore, 'users', teacher.id);
-            const sessionRef = doc(firestore, 'sessions', session.id);
+            // Step 1: Generate the Google Meet link via the AI flow.
+            const sessionInput: CreateSessionInput = { sessionId: session.id };
+            const sessionResult = await createSession(sessionInput);
+
+            if (!sessionResult.success || !sessionResult.meetLink) {
+                 throw new Error(sessionResult.message || 'Failed to create Google Meet link.');
+            }
             
-            // Teacher adds credits to their own account.
-            updateDocumentNonBlocking(teacherRef, { credits: teacher.credits + session.creditsTransferred });
+            // Step 2: Update teacher's credits.
+            const teacherRef = doc(firestore, 'users', teacher.id);
+            updateDocumentNonBlocking(teacherRef, { credits: (teacher.credits || 0) + session.creditsTransferred });
 
-            // Update session status to scheduled
-            updateDocumentNonBlocking(sessionRef, { status: 'scheduled' });
-
+            // Step 3: Update session status to 'scheduled' and add the Meet link.
+            const sessionRef = doc(firestore, 'sessions', session.id);
+            updateDocumentNonBlocking(sessionRef, { 
+                status: 'scheduled',
+                googleMeetLink: sessionResult.meetLink,
+            });
 
             toast({
                 title: 'Request Accepted!',
-                description: 'The session has been scheduled and credits transferred.',
+                description: 'The session has been scheduled and a Meet link is generated.',
             });
 
         } catch(error: any) {
@@ -253,7 +230,7 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
             <CardFooter className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={handleDecline} disabled={isLoading}><X className="mr-2 h-4 w-4"/>Decline</Button>
                 <Button size="sm" onClick={handleAccept} disabled={isLoading}>
-                    {isLoading ? 'Accepting...' : <><Check className="mr-2 h-4 w-4"/>Accept & Transfer Credit</>}
+                    {isLoading ? 'Accepting...' : <><Check className="mr-2 h-4 w-4"/>Accept & Create Meet</>}
                 </Button>
             </CardFooter>
         </Card>
@@ -358,5 +335,3 @@ export default function SessionsPage() {
         </div>
     );
 }
-
-    
