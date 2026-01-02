@@ -87,7 +87,14 @@ const getRecommendationsFlow = ai.defineFlow(
         outputSchema: GetRecommendationsOutputSchema,
     },
     async (input) => {
-        const { output } = await recommendationPrompt(input);
-        return output || [];
+        try {
+            const { output } = await recommendationPrompt(input);
+            return output || [];
+        } catch (error) {
+            console.error("Error in getRecommendationsFlow, returning empty array:", error);
+            // If the AI call fails for any reason (e.g., rate limit), return an empty array
+            // to allow the frontend to use its fallback logic.
+            return [];
+        }
     }
 );
