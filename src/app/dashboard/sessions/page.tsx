@@ -209,16 +209,13 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
             const teacherRef = doc(firestore, 'users', teacher.id);
             const sessionRef = doc(firestore, 'sessions', session.id);
 
-            const batch = writeBatch(firestore);
-
-            // Deduct credits from learner, add to teacher
-            batch.update(learnerRef, { credits: learner.credits - session.creditsTransferred });
-            batch.update(teacherRef, { credits: teacher.credits + session.creditsTransferred });
+            // Deduct credits from learner, add to teacher in separate non-blocking updates
+            updateDocumentNonBlocking(learnerRef, { credits: learner.credits - session.creditsTransferred });
+            updateDocumentNonBlocking(teacherRef, { credits: teacher.credits + session.creditsTransferred });
             
             // Update session status to scheduled
-            batch.update(sessionRef, { status: 'scheduled' });
+            updateDocumentNonBlocking(sessionRef, { status: 'scheduled' });
 
-            await batch.commit();
 
             toast({
                 title: 'Request Accepted!',
@@ -366,7 +363,7 @@ export default function SessionsPage() {
                 <TabsContent value="scheduled" className="mt-6">
                     {scheduledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {scheduledSessions.sort((a,b) => b.sessionDate.toDate() - a.sessionDate.toDate()).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
+                            {scheduledSessions.sort((a,b) => (b.sessionDate?.toDate() ?? 0) - (a.sessionDate?.toDate() ?? 0)).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No scheduled sessions.</p>
@@ -375,7 +372,7 @@ export default function SessionsPage() {
                 <TabsContent value="completed" className="mt-6">
                     {completedSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {completedSessions.sort((a,b) => b.sessionDate.toDate() - a.sessionDate.toDate()).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser}/>)}
+                            {completedSessions.sort((a,b) => (b.sessionDate?.toDate() ?? 0) - (a.sessionDate?.toDate() ?? 0)).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser}/>)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No completed sessions.</p>
@@ -384,7 +381,7 @@ export default function SessionsPage() {
                 <TabsContent value="cancelled" className="mt-6">
                     {cancelledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {cancelledSessions.sort((a,b) => b.sessionDate.toDate() - a.sessionDate.toDate()).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
+                            {cancelledSessions.sort((a,b) => (b.sessionDate?.toDate() ?? 0) - (a.sessionDate?.toDate() ?? 0)).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No cancelled sessions.</p>
@@ -394,3 +391,5 @@ export default function SessionsPage() {
         </div>
     );
 }
+
+    
