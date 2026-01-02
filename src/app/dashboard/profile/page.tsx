@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { generateSkillQuiz, type GenerateSkillQuizOutput } from "@/ai/flows/skill-verification-quiz";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 
 const skillKnownSchema = z.object({
@@ -65,6 +66,8 @@ export default function ProfilePage() {
 
     const [isVerifying, setIsVerifying] = React.useState(false);
     const [quiz, setQuiz] = React.useState<GenerateSkillQuizOutput & { skillName: string } | null>(null);
+    const [quizAnswers, setQuizAnswers] = React.useState<Record<number, number>>({});
+    const [quizResult, setQuizResult] = React.useState<{ score: number; passed: boolean } | null>(null);
 
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
@@ -112,11 +115,13 @@ export default function ProfilePage() {
         }
     }, [user, firestore, form]);
 
-    const handleVerifySkill = async (skillName: string) => {
+    const handleVerifySkill = async (skillName: string, level: SkillLevel) => {
         setIsVerifying(true);
         setQuiz(null);
+        setQuizAnswers({});
+        setQuizResult(null);
         try {
-            const result = await generateSkillQuiz({ skillName });
+            const result = await generateSkillQuiz({ skillName, level });
             setQuiz({ ...result, skillName });
         } catch (error) {
             console.error("Error generating skill quiz:", error);
@@ -130,24 +135,48 @@ export default function ProfilePage() {
         }
     };
 
-    const handleMarkAssessmentComplete = () => {
+    const handleAnswerChange = (questionIndex: number, answerIndex: number) => {
+        setQuizAnswers(prev => ({...prev, [questionIndex]: answerIndex}));
+    };
+    
+    const handleSubmitQuiz = () => {
         if (!quiz) return;
-        
-        const skillIndex = skillsKnownFields.findIndex(field => field.skillName === quiz.skillName);
-        if (skillIndex !== -1) {
-            const skill = skillsKnownFields[skillIndex];
-            updateSkillKnown(skillIndex, { ...skill, isVerified: true });
-            
-            toast({
-                title: "Skill Verified!",
-                description: `You are now a verified teacher for ${quiz.skillName}.`,
+
+        let score = 0;
+        quiz.questions.forEach((q, index) => {
+            if (quizAnswers[index] === q.correctAnswerIndex) {
+                score++;
+            }
+        });
+
+        const totalQuestions = quiz.questions.length;
+        const percentage = (score / totalQuestions) * 100;
+        const passed = percentage >= 70; // 70% passing score
+
+        setQuizResult({ score, passed });
+
+        if (passed) {
+            const skillIndex = skillsKnownFields.findIndex(field => field.skillName === quiz.skillName);
+            if (skillIndex !== -1) {
+                const skill = skillsKnownFields[skillIndex];
+                updateSkillKnown(skillIndex, { ...skill, isVerified: true });
+                
+                toast({
+                    title: "Skill Verified!",
+                    description: `You passed the test and are now a verified teacher for ${quiz.skillName}.`,
+                });
+                 // We need to save the change
+                form.handleSubmit(onSubmit)();
+            }
+        } else {
+             toast({
+                variant: "destructive",
+                title: "Verification Failed",
+                description: `You scored ${percentage}%. A score of 70% is required to pass. Please try again.`,
             });
         }
-        
-        setQuiz(null);
-        // We still need to save the change
-        form.handleSubmit(onSubmit)();
     };
+
 
     const onSubmit = (data: ProfileFormValues) => {
         if (!user || !firestore) return;
@@ -250,7 +279,7 @@ export default function ProfilePage() {
                                                 </div>
                                                <div className="flex items-center gap-2">
                                                     {!field.isVerified ? (
-                                                        <Button size="sm" type="button" variant="outline" onClick={() => handleVerifySkill(field.skillName)} disabled={isVerifying}>
+                                                        <Button size="sm" type="button" variant="outline" onClick={() => handleVerifySkill(field.skillName, field.level as SkillLevel)} disabled={isVerifying}>
                                                             {isVerifying && quiz?.skillName !== field.skillName ? 'Verifying...' : 'Get Verified'}
                                                         </Button>
                                                     ) : (
@@ -297,25 +326,50 @@ export default function ProfilePage() {
                                         <CardHeader>
                                             <CardTitle className="flex items-center gap-2">
                                                 <BookOpen className="w-5 h-5 text-primary"/>
-                                                Self-Assessment: {quiz.skillName}
+                                                Verification Quiz: {quiz.skillName}
                                             </CardTitle>
-                                            <CardDescription>Review the questions and your conceptual answers. This is a trust-based verification.</CardDescription>
+                                            <CardDescription>
+                                                Answer at least 7 out of 10 questions correctly to get verified.
+                                            </CardDescription>
                                         </CardHeader>
-                                        <CardContent className="space-y-4">
-                                            {quiz.questions.map((q, i) => (
-                                                <Alert key={i}>
-                                                    <AlertTitle>{i + 1}. {q.question}</AlertTitle>
-                                                    <AlertDescription className="mt-2 text-xs italic">
-                                                        <strong>Expected Answer Focus:</strong> {q.answer}
+                                        <CardContent className="space-y-6">
+                                            {quizResult ? (
+                                                <Alert variant={quizResult.passed ? "default" : "destructive"}>
+                                                    <AlertTitle>
+                                                        {quizResult.passed ? "Verification Passed!" : "Verification Failed"}
+                                                    </AlertTitle>
+                                                    <AlertDescription>
+                                                        You scored {quizResult.score} out of {quiz.questions.length}.
+                                                        {quizResult.passed ? " Your skill is now verified!" : " You need a score of 70% or higher to pass. Feel free to try again."}
                                                     </AlertDescription>
                                                 </Alert>
-                                            ))}
+                                            ) : (
+                                                quiz.questions.map((q, qIndex) => (
+                                                    <div key={qIndex}>
+                                                        <p className="font-medium mb-2">{qIndex + 1}. {q.question}</p>
+                                                        <RadioGroup onValueChange={(value) => handleAnswerChange(qIndex, parseInt(value))}>
+                                                            {q.options.map((option, oIndex) => (
+                                                                <div key={oIndex} className="flex items-center space-x-2">
+                                                                    <RadioGroupItem value={oIndex.toString()} id={`q${qIndex}o${oIndex}`} />
+                                                                    <Label htmlFor={`q${qIndex}o${oIndex}`}>{option}</Label>
+                                                                </div>
+                                                            ))}
+                                                        </RadioGroup>
+                                                    </div>
+                                                ))
+                                            )}
                                         </CardContent>
-                                        <CardFooter className="flex-col gap-2">
-                                             <Button onClick={handleMarkAssessmentComplete} className="w-full">
-                                                Mark Assessment as Complete & Get Verified
-                                            </Button>
-                                             <p className="text-xs text-muted-foreground">This is a trust-based system for the MVP.</p>
+                                        <CardFooter>
+                                            {!quizResult && (
+                                                <Button onClick={handleSubmitQuiz} className="w-full" disabled={Object.keys(quizAnswers).length !== quiz.questions.length}>
+                                                    Submit Quiz
+                                                </Button>
+                                            )}
+                                            {quizResult && (
+                                                 <Button onClick={() => setQuiz(null)} className="w-full" variant="outline">
+                                                    Close
+                                                </Button>
+                                            )}
                                         </CardFooter>
                                     </Card>
                                 )}
