@@ -130,14 +130,25 @@ export default function DashboardPage() {
           const recommendations = await getRecommendations({ currentUser, allUsers: allOtherUsers });
           setRecommendedUsers(recommendations);
         } catch (error) {
-          console.error("Failed to get recommendations:", error);
-          toast({
-            variant: "destructive",
-            title: "Could not load AI recommendations",
-            description: "Displaying all users as a fallback. You may have exceeded the API quota.",
-          });
+          console.error("AI recommendation failed, using fallback:", error);
+          
           // Fallback to simple filtering if AI fails
-          setRecommendedUsers(allUsers.filter(u => u.id !== currentUser.id));
+          const wantedSkills = new Set(currentUser.skillsWanted.map(s => s.skillName));
+          const fallbackRecommendations = allUsers
+            .filter(u => u.id !== currentUser.id)
+            .filter(teacher => 
+              teacher.skillsKnown.some(knownSkill => wantedSkills.has(knownSkill.skillName))
+            )
+            .sort((a, b) => {
+              const aMatches = a.skillsKnown.filter(s => wantedSkills.has(s.skillName) && s.isVerified).length;
+              const bMatches = b.skillsKnown.filter(s => wantedSkills.has(s.skillName) && s.isVerified).length;
+              if (aMatches !== bMatches) {
+                return bMatches - aMatches;
+              }
+              return (b.rating || 0) - (a.rating || 0);
+            });
+
+          setRecommendedUsers(fallbackRecommendations);
         } finally {
           setIsLoading(false);
         }
