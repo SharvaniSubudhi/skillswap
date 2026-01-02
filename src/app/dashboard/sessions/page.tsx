@@ -64,7 +64,7 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
 
     const getFormattedDate = () => {
         if (!session.sessionDate) return "Date not set";
-        const date = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
+        const date = session.sessionDate?.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
         if (isNaN(date.getTime())) return "Invalid date";
         return formatInTimeZone(date, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
     }
@@ -191,7 +191,7 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
     const getFormattedDate = () => {
         if (!session.sessionDate) return "Date not set";
         // Firestore timestamps might not be converted to Date objects yet.
-        const date = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
+        const date = session.sessionDate?.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
         if (isNaN(date.getTime())) return "Invalid date";
         return formatInTimeZone(date, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
     }
@@ -204,13 +204,10 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
             description: 'Updating status and creating calendar event.',
         });
         try {
-            // 1. Transaction to update credits and session status
-            const learnerRef = doc(firestore, 'users', learner.id);
             const teacherRef = doc(firestore, 'users', teacher.id);
             const sessionRef = doc(firestore, 'sessions', session.id);
-
-            // Deduct credits from learner, add to teacher in separate non-blocking updates
-            updateDocumentNonBlocking(learnerRef, { credits: learner.credits - session.creditsTransferred });
+            
+            // Teacher adds credits to their own account.
             updateDocumentNonBlocking(teacherRef, { credits: teacher.credits + session.creditsTransferred });
             
             // Update session status to scheduled
@@ -391,5 +388,3 @@ export default function SessionsPage() {
         </div>
     );
 }
-
-    
