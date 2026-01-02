@@ -10,11 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
 import type { Session, User } from "@/lib/types";
 import { formatInTimeZone } from "date-fns-tz";
-import { Video, Star, MessageSquare, AlertCircle, Check, X } from "lucide-react";
+import { Video, Star, MessageSquare, AlertCircle, Check, X, LogOut, Clock } from "lucide-react";
 import { createSession } from "@/ai/flows/create-session";
 import { useToast } from "@/hooks/use-toast";
 import { doc, getDoc, updateDoc, collection, query, where } from "firebase/firestore";
 import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 
 type CreateSessionInput = {
     sessionId: string;
@@ -29,6 +30,7 @@ const getInitials = (name: string) => {
 
 const statusColors = {
     scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+    ongoing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
     completed: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
     requested: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
@@ -36,11 +38,13 @@ const statusColors = {
 
 
 const SessionCard = ({ session, currentUser }: { session: Session, currentUser: User | null }) => {
+    const { firestore, user: authUser } = useFirebase();
+    const { toast } = useToast();
     const isTeacher = session.teacherId === currentUser?.id;
-
     const [teacher, setTeacher] = React.useState<any>(null);
     const [learner, setLearner] = React.useState<any>(null);
-    const { firestore } = useFirebase();
+    const [showCountdown, setShowCountdown] = React.useState(false);
+    const [countdown, setCountdown] = React.useState("");
 
     React.useEffect(() => {
         if (firestore && session) {
@@ -56,70 +60,184 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
         }
     }, [firestore, session]);
 
+     const calculateCountdown = React.useCallback(() => {
+        if (!session.sessionDate) return;
+        const now = new Date().getTime();
+        const startTime = session.sessionDate.toDate().getTime();
+        const distance = startTime - now;
+
+        if (distance < 0) {
+            setCountdown("Session has started!");
+            return;
+        }
+
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        
+        let countdownString = "";
+        if (days > 0) countdownString += `${days}d `;
+        if (hours > 0) countdownString += `${hours}h `;
+        if (minutes > 0) countdownString += `${minutes}m `;
+        countdownString += `${seconds}s`;
+
+        setCountdown(countdownString);
+    }, [session.sessionDate]);
+
+    React.useEffect(() => {
+        if (showCountdown) {
+            calculateCountdown();
+            const interval = setInterval(calculateCountdown, 1000);
+            return () => clearInterval(interval);
+        }
+    }, [showCountdown, calculateCountdown]);
+
+
     const getFormattedDate = () => {
         if (!session.sessionDate) return "Date not set";
         const date = session.sessionDate?.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
         if (isNaN(date.getTime())) return "Invalid date";
         return formatInTimeZone(date, 'UTC', "EEEE, MMMM d, yyyy 'at' h:mm a zzz");
     }
+    
+    const handleJoinNow = async () => {
+        if (!firestore) return;
+        
+        const now = new Date();
+        const startTime = session.sessionDate.toDate();
+
+        if (now < startTime) {
+            setShowCountdown(true);
+            return;
+        }
+
+        let meetLink = session.googleMeetLink;
+
+        try {
+            if (!meetLink) {
+                 toast({ title: 'Generating Meet Link...' });
+                 const sessionInput: CreateSessionInput = { sessionId: session.id };
+                 const sessionResult = await createSession(sessionInput);
+                 if (!sessionResult.success || !sessionResult.meetLink) {
+                     throw new Error(sessionResult.message || 'Failed to create Google Meet link.');
+                 }
+                 meetLink = sessionResult.meetLink;
+            }
+            
+            const sessionRef = doc(firestore, 'sessions', session.id);
+            updateDocumentNonBlocking(sessionRef, { 
+                status: 'ongoing',
+                googleMeetLink: meetLink 
+            });
+
+            window.open(meetLink, '_blank');
+
+        } catch (error: any) {
+             toast({
+                variant: 'destructive',
+                title: 'Error Joining Session',
+                description: error.message || 'Could not join the session.',
+            });
+        }
+    };
+    
+    const handleEndSession = async () => {
+        if (!firestore) return;
+        try {
+            const sessionRef = doc(firestore, 'sessions', session.id);
+            updateDocumentNonBlocking(sessionRef, { status: 'completed' });
+            toast({
+                title: 'Session Ended',
+                description: 'The session has been marked as complete.',
+            });
+        } catch (error: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Error Ending Session',
+                description: error.message || 'Could not end the session.',
+            });
+        }
+    };
 
     if (!teacher || !learner) return null; // Or a loading skeleton
     
     const otherUser = isTeacher ? learner : teacher;
 
-    const handleJoinNow = async () => {
-        if (session.googleMeetLink) {
-            window.open(session.googleMeetLink, '_blank');
-        } else {
-            alert("The Google Meet link for this session has not been generated yet. This typically happens when the teacher accepts the request.");
-        }
-    };
-
-
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex justify-between items-start">
-                    <div>
-                        <CardTitle className="font-headline text-lg">{session.skill}</CardTitle>
-                        <CardDescription>
-                            {getFormattedDate()}
-                        </CardDescription>
+        <>
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle className="font-headline text-lg">{session.skill}</CardTitle>
+                            <CardDescription>
+                                {getFormattedDate()}
+                            </CardDescription>
+                        </div>
+                        <Badge className={`${statusColors[session.status]} border-0 capitalize`}>{session.status}</Badge>
                     </div>
-                    <Badge className={`${statusColors[session.status]} border-0 capitalize`}>{session.status}</Badge>
-                </div>
-            </CardHeader>
-            <CardContent className="flex items-center gap-4">
-                <Avatar className="w-12 h-12">
-                    <AvatarImage src={otherUser.avatarUrl} alt={otherUser.name} />
-                    <AvatarFallback>{getInitials(otherUser.name)}</AvatarFallback>
-                </Avatar>
-                <div>
-                    <p className="font-semibold">{otherUser.name}</p>
-                    <p className="text-sm text-muted-foreground">{isTeacher ? 'Learner' : 'Teacher'}</p>
-                </div>
-            </CardContent>
-            <CardFooter className="flex justify-between items-center">
-                <div className="text-sm text-muted-foreground">
-                    {session.duration} hr session
-                </div>
-                {session.status === 'scheduled' && (
-                    <Button onClick={handleJoinNow}>
-                        <Video className="mr-2 h-4 w-4" /> Join Now
-                    </Button>
-                )}
-                {session.status === 'completed' && !session.feedback && (
-                    <Button variant="outline">
-                        <Star className="mr-2 h-4 w-4" /> Rate Session
-                    </Button>
-                )}
-                 {session.status === 'completed' && session.feedback && (
-                    <Button variant="ghost" className="text-muted-foreground">
-                        <MessageSquare className="mr-2 h-4 w-4" /> View Feedback
-                    </Button>
-                )}
-            </CardFooter>
-        </Card>
+                </CardHeader>
+                <CardContent className="flex items-center gap-4">
+                    <Avatar className="w-12 h-12">
+                        <AvatarImage src={otherUser.avatarUrl} alt={otherUser.name} />
+                        <AvatarFallback>{getInitials(otherUser.name)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <p className="font-semibold">{otherUser.name}</p>
+                        <p className="text-sm text-muted-foreground">{isTeacher ? 'Learner' : 'Teacher'}</p>
+                    </div>
+                </CardContent>
+                <CardFooter className="flex justify-between items-center">
+                    <div className="text-sm text-muted-foreground">
+                        {session.duration} hr session
+                    </div>
+                    {['scheduled', 'ongoing'].includes(session.status) && (
+                        <div className="flex gap-2">
+                             {isTeacher && (
+                                <Button variant="destructive" size="sm" onClick={handleEndSession}>
+                                    <LogOut className="mr-2 h-4 w-4" /> End Session
+                                </Button>
+                            )}
+                            <Button onClick={handleJoinNow}>
+                                <Video className="mr-2 h-4 w-4" /> Join Now
+                            </Button>
+                        </div>
+                    )}
+                    {session.status === 'completed' && !session.feedback && (
+                        <Button variant="outline">
+                            <Star className="mr-2 h-4 w-4" /> Rate Session
+                        </Button>
+                    )}
+                    {session.status === 'completed' && session.feedback && (
+                        <Button variant="ghost" className="text-muted-foreground">
+                            <MessageSquare className="mr-2 h-4 w-4" /> View Feedback
+                        </Button>
+                    )}
+                </CardFooter>
+            </Card>
+
+            <Dialog open={showCountdown} onOpenChange={setShowCountdown}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Session Not Started Yet</DialogTitle>
+                        <DialogDescription>
+                            Your session is scheduled to begin soon.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-8 flex flex-col items-center justify-center gap-4">
+                        <Clock className="w-16 h-16 text-primary" />
+                        <p className="text-2xl font-bold font-mono">{countdown}</p>
+                        <p className="text-muted-foreground">The "Join Now" button will work once the session starts.</p>
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Close</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 };
 
@@ -274,7 +392,7 @@ export default function SessionsPage() {
     }, [learnerSessions, teacherSessions]);
     
     const sessionRequests = allSessions.filter(s => s.status === 'requested' && currentUser && s.teacherId === currentUser.id);
-    const scheduledSessions = allSessions.filter(s => s.status === 'scheduled');
+    const scheduledSessions = allSessions.filter(s => ['scheduled', 'ongoing'].includes(s.status));
     const completedSessions = allSessions.filter(s => s.status === 'completed');
     const cancelledSessions = allSessions.filter(s => s.status === 'cancelled');
 
@@ -300,7 +418,7 @@ export default function SessionsPage() {
 
             <Tabs defaultValue="scheduled" className="pt-6">
                 <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+                    <TabsTrigger value="scheduled">Scheduled & Ongoing</TabsTrigger>
                     <TabsTrigger value="completed">Completed</TabsTrigger>
                     <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
                 </TabsList>

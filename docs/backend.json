@@ -64,7 +64,7 @@
             "duration": { "type": "number" },
             "creditsTransferred": { "type": "number" },
             "googleMeetLink": { "type": "string", "format": "uri" },
-            "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled", "requested"] },
+            "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled", "requested", "ongoing"] },
             "feedback": { "type": "string" },
             "rating": { "type": "number" },
             "disputeRaised": { "type": "boolean" },

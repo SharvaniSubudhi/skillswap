@@ -32,7 +32,7 @@ export type Session = {
   duration: number; // in hours
   creditsTransferred: number;
   googleMeetLink?: string;
-  status: 'scheduled' | 'completed' | 'cancelled' | 'requested';
+  status: 'scheduled' | 'completed' | 'cancelled' | 'requested' | 'ongoing';
   feedback?: string;
   rating?: number;
   disputeRaised: boolean;
