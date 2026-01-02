@@ -70,7 +70,7 @@
             "disputeRaised": { "type": "boolean" },
             "sessionDate": { "type": "string", "format": "date-time" }
         },
-        "required": ["teacherId", "learnerId", "skill", "duration", "creditsTransferred", "status", "sessionDate"]
+        "required": ["teacherId", "learnerId", "skill", "duration", "creditsTransferred", "status"]
     }
   },
   "auth": {
