@@ -194,15 +194,10 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
         });
         try {
             const teacherRef = doc(firestore, 'users', teacher.id);
-            const learnerRef = doc(firestore, 'users', learner.id);
             const sessionRef = doc(firestore, 'sessions', session.id);
             
             // Teacher adds credits to their own account.
             updateDocumentNonBlocking(teacherRef, { credits: teacher.credits + session.creditsTransferred });
-            
-            // This will fail due to security rules, but it's here to optimistically update the learner's UI.
-            // The learner's client will eventually write this change. This is a limitation of a client-only architecture.
-            updateDocumentNonBlocking(learnerRef, { credits: learner.credits - session.creditsTransferred });
 
             // Update session status to scheduled
             updateDocumentNonBlocking(sessionRef, { status: 'scheduled' });
@@ -335,7 +330,7 @@ export default function SessionsPage() {
                 <TabsContent value="scheduled" className="mt-6">
                     {scheduledSessions.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
-                            {scheduledSessions.sort((a,b) => ((b.sessionDate?.toDate()?.getTime() || 0) - (a.sessionDate?.toDate()?.getTime() || 0))).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
+                            {scheduledSessions.sort((a,b) => ((a.sessionDate?.toDate()?.getTime() || 0) - (b.sessionDate?.toDate()?.getTime() || 0))).map(s => <SessionCard key={s.id} session={s} currentUser={currentUser} />)}
                         </div>
                     ) : (
                         <p className="text-center text-muted-foreground py-12">No scheduled sessions.</p>
@@ -363,3 +358,5 @@ export default function SessionsPage() {
         </div>
     );
 }
+
+    
