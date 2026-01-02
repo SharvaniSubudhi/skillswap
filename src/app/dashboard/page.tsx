@@ -104,9 +104,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   const usersQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !authUser) return null;
     return collection(firestore, "users");
-  }, [firestore]);
+  }, [firestore, authUser]);
 
   const { data: allUsers } = useCollection<User>(usersQuery);
 
@@ -128,7 +128,28 @@ export default function DashboardPage() {
         try {
           const allOtherUsers = allUsers.filter(u => u.id !== currentUser.id);
           const recommendations = await getRecommendations({ currentUser, allUsers: allOtherUsers });
-          setRecommendedUsers(recommendations);
+          
+          if(recommendations.length > 0){
+            setRecommendedUsers(recommendations);
+          } else {
+             // Fallback to simple filtering if AI fails or returns no results
+            const wantedSkills = new Set(currentUser.skillsWanted.map(s => s.skillName));
+            const fallbackRecommendations = allUsers
+              .filter(u => u.id !== currentUser.id)
+              .filter(teacher => 
+                teacher.skillsKnown.some(knownSkill => wantedSkills.has(knownSkill.skillName))
+              )
+              .sort((a, b) => {
+                const aMatches = a.skillsKnown.filter(s => wantedSkills.has(s.skillName) && s.isVerified).length;
+                const bMatches = b.skillsKnown.filter(s => wantedSkills.has(s.skillName) && s.isVerified).length;
+                if (aMatches !== bMatches) {
+                  return bMatches - aMatches;
+                }
+                return (b.rating || 0) - (a.rating || 0);
+              });
+             setRecommendedUsers(fallbackRecommendations);
+          }
+
         } catch (error) {
           console.error("AI recommendation failed, using fallback:", error);
           
@@ -159,12 +180,16 @@ export default function DashboardPage() {
       }
     }
 
-    if (currentUser) {
+    if (currentUser && allUsers) {
         fetchRecommendations();
-    } else if (allUsers) {
-        // Handle case where authUser is loaded but currentUser profile is not yet fetched
+    } else if (authUser && allUsers) {
+        // Handle case where authUser is loaded but currentUser profile is not yet fetched but we can still show all users.
+        setRecommendedUsers(allUsers.filter(u => u.id !== authUser.uid));
         setIsLoading(false);
+    } else if (!authUser && !allUsers) {
+        setIsLoading(true);
     }
+
   }, [currentUser, allUsers, authUser, toast]);
 
   return (
