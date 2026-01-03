@@ -112,34 +112,21 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
             return;
         }
 
-        let meetLink = session.googleMeetLink;
+        const meetLink = session.googleMeetLink;
 
-        try {
-            if (!meetLink) {
-                 toast({ title: 'Generating Meet Link...' });
-                 const sessionInput: CreateSessionInput = { sessionId: session.id };
-                 const sessionResult = await createSession(sessionInput);
-                 if (!sessionResult.success || !sessionResult.meetLink) {
-                     throw new Error(sessionResult.message || 'Failed to create Google Meet link.');
-                 }
-                 meetLink = sessionResult.meetLink;
-            }
-            
-            const sessionRef = doc(firestore, 'sessions', session.id);
-            updateDocumentNonBlocking(sessionRef, { 
-                status: 'ongoing',
-                googleMeetLink: meetLink 
-            });
-
-            window.open(meetLink, '_blank');
-
-        } catch (error: any) {
-             toast({
+        if (!meetLink) {
+            toast({
                 variant: 'destructive',
-                title: 'Error Joining Session',
-                description: error.message || 'Could not join the session.',
+                title: 'No Meeting Link',
+                description: 'The meeting link has not been generated for this session yet.',
             });
+            return;
         }
+            
+        const sessionRef = doc(firestore, 'sessions', session.id);
+        updateDocumentNonBlocking(sessionRef, { status: 'ongoing' });
+
+        window.open(meetLink, '_blank');
     };
     
     const handleEndSession = async () => {
@@ -276,7 +263,7 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
          setIsLoading(true);
          toast({
             title: 'Accepting Request...',
-            description: 'Transferring credits and generating Meet link.',
+            description: 'Generating Meet link and scheduling session.',
         });
         try {
             // Step 1: Generate the Google Meet link via the AI flow.
@@ -287,20 +274,23 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
                  throw new Error(sessionResult.message || 'Failed to create Google Meet link.');
             }
             
-            // Step 2: Update teacher's credits.
-            const teacherRef = doc(firestore, 'users', teacher.id);
-            updateDocumentNonBlocking(teacherRef, { credits: (teacher.credits || 0) + session.creditsTransferred });
-
-            // Step 3: Update session status to 'scheduled' and add the Meet link.
+            // Step 2: Update session status to 'scheduled' and add the Meet link.
             const sessionRef = doc(firestore, 'sessions', session.id);
             updateDocumentNonBlocking(sessionRef, { 
                 status: 'scheduled',
                 googleMeetLink: sessionResult.meetLink,
             });
 
+            // Step 3: Update teacher and learner credits.
+            const teacherRef = doc(firestore, 'users', teacher.id);
+            updateDocumentNonBlocking(teacherRef, { credits: (teacher.credits || 0) + session.creditsTransferred });
+
+            const learnerRef = doc(firestore, 'users', learner.id);
+            updateDocumentNonBlocking(learnerRef, { credits: (learner.credits || 0) - session.creditsTransferred });
+
             toast({
                 title: 'Request Accepted!',
-                description: 'The session has been scheduled and a Meet link is generated.',
+                description: 'The session has been scheduled. Credits transferred.',
             });
 
         } catch(error: any) {
@@ -453,3 +443,5 @@ export default function SessionsPage() {
         </div>
     );
 }
+
+    
