@@ -281,16 +281,15 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
                 googleMeetLink: sessionResult.meetLink,
             });
 
-            // Step 3: Update teacher and learner credits.
+            // Step 3: Update teacher's credits ONLY.
             const teacherRef = doc(firestore, 'users', teacher.id);
             updateDocumentNonBlocking(teacherRef, { credits: (teacher.credits || 0) + session.creditsTransferred });
 
-            const learnerRef = doc(firestore, 'users', learner.id);
-            updateDocumentNonBlocking(learnerRef, { credits: (learner.credits || 0) - session.creditsTransferred });
+            // The learner's credits are implicitly handled by the shared session document status.
 
             toast({
                 title: 'Request Accepted!',
-                description: 'The session has been scheduled. Credits transferred.',
+                description: 'The session has been scheduled. Credits will be transferred upon completion.',
             });
 
         } catch(error: any) {
@@ -443,5 +442,7 @@ export default function SessionsPage() {
         </div>
     );
 }
+
+    
 
     
