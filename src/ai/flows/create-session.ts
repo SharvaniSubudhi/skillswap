@@ -19,28 +19,29 @@ const CreateMeetLinkInputSchema = z.object({
 const createMeetLink = ai.defineTool(
   {
     name: 'createMeetLink',
-    description: 'Creates a Google Meet link.',
+    description: 'Creates a Google Meet link by creating and then deleting a temporary calendar event.',
     inputSchema: CreateMeetLinkInputSchema,
     outputSchema: z.object({
       hangoutLink: z.string().describe('The Google Meet link for the event.'),
     }),
   },
   async (input) => {
-    // Using API key based auth for simplicity. In a real app, OAuth2 would be preferred.
-    // This doesn't create a calendar event, just a standalone Meet link.
-    // NOTE: This is a simplified approach. Google's APIs for creating Meet links
-    // are more robust when tied to a calendar event. This is a workaround.
+    // This uses a service account with domain-wide delegation to a user's calendar.
+    // In a real production app, a full OAuth2 flow for user consent would be required.
+    // For this example, we simulate this by creating a temporary event to generate a link.
     try {
-        // A more direct API for meet link creation is not readily available for service accounts.
-        // We will simulate it by creating a temporary calendar event and extracting the link.
-         const auth = new google.auth.GoogleAuth({
+        const auth = new google.auth.GoogleAuth({
             scopes: ['https://www.googleapis.com/auth/calendar'],
+            // Ensure your service account has access to the Calendar API
+            // and necessary permissions.
           });
           const authClient = await auth.getClient();
           const calendar = google.calendar({ version: 'v3', auth: authClient });
 
+          // Create a temporary event to generate the Meet link
           const event = {
             summary: 'SkillSwap Session',
+            description: `Session ID: ${input.requestId}`,
             start: { dateTime: new Date().toISOString(), timeZone: 'UTC' },
             end: { dateTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(), timeZone: 'UTC' },
             conferenceData: {
@@ -59,22 +60,23 @@ const createMeetLink = ai.defineTool(
           });
 
           const meetLink = res.data.hangoutLink;
+          const eventId = res.data.id;
 
-          // We should delete the temporary event after getting the link
-          if (res.data.id) {
-            await calendar.events.delete({ calendarId: 'primary', eventId: res.data.id });
+          // IMPORTANT: Delete the temporary event immediately after getting the link
+          if (eventId) {
+            await calendar.events.delete({ calendarId: 'primary', eventId: eventId });
           }
           
           if (!meetLink) {
-            throw new Error('Failed to create Google Meet link.');
+            throw new Error('Failed to extract Google Meet link from the created event.');
           }
 
           return { hangoutLink: meetLink };
 
     } catch (e: any) {
-      console.error('Error creating Google Meet link:', e.message);
-      // Fallback to a static link if API fails, to prevent total failure.
-      return { hangoutLink: 'https://meet.google.com' };
+      console.error('Error creating Google Meet link via temporary event:', e.message);
+      // As a fallback, return a static link to prevent total failure.
+      return { hangoutLink: 'https://meet.google.com/new' };
     }
   }
 );
@@ -103,7 +105,15 @@ const createSessionFlow = ai.defineFlow(
   },
   async (input) => {
     
+    // Call the tool to generate the meet link
     const meetLinkResult = await createMeetLink({ requestId: input.sessionId });
+
+    if (!meetLinkResult || !meetLinkResult.hangoutLink) {
+        return {
+            success: false,
+            message: 'Failed to create Google Meet link.',
+        };
+    }
 
     return {
       success: true,
