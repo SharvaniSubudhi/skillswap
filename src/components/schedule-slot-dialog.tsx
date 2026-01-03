@@ -10,9 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { requestSession } from "@/ai/flows/request-session";
 import type { User } from "@/lib/types";
 import { useFirebase } from "@/firebase";
-import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
-import { collection } from "firebase/firestore";
+import { addDoc, collection, doc, updateDoc } from "firebase/firestore";
 import { getNextOccurrence } from "@/lib/date-utils";
+import { addDocumentNonBlocking, updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 type RequestSessionInput = {
     teacher: { name: string, email: string };
@@ -49,7 +49,9 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
             return;
         }
 
-        if (learner.credits < 1) {
+        const creditsToTransfer = 1; // Assuming 1 credit for 1 hour session
+
+        if ((learner.credits || 0) < creditsToTransfer) {
             toast({
                 variant: "destructive",
                 title: "Insufficient Credits",
@@ -60,25 +62,30 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
 
         setIsLoading(true);
         try {
-            // 1. Calculate the correct session date from the selected slot
+            // 1. Deduct credits from learner immediately
+            const learnerRef = doc(firestore, "users", learner.id);
+            const newLearnerCredits = (learner.credits || 0) - creditsToTransfer;
+            await updateDoc(learnerRef, { credits: newLearnerCredits });
+
+            // 2. Calculate the correct session date from the selected slot
             const [day, time] = selectedSlot.split(' at ');
             const sessionDate = getNextOccurrence(day, time.split(' - ')[0]);
 
-            // 2. Create Session Record with 'requested' status and the correct future date
+            // 3. Create Session Record with 'requested' status and the correct future date
             const sessionData = {
                 teacherId: teacher.id,
                 learnerId: learner.id,
                 skill: selectedSkill,
                 duration: 1, // Assuming 1 hour for now
-                creditsTransferred: 1, // Assuming 1 credit for 1 hour
+                creditsTransferred: creditsToTransfer,
                 status: 'requested',
-                sessionDate: sessionDate, // Use the calculated future date
+                sessionDate: sessionDate,
                 disputeRaised: false,
             };
             const sessionsCol = collection(firestore, "sessions");
-            const newSessionRef = await addDocumentNonBlocking(sessionsCol, sessionData);
+            const newSessionRef = await addDoc(sessionsCol, sessionData);
 
-            // 3. Send notification to teacher via AI flow
+            // 4. Send notification to teacher via AI flow (optional, for simulation)
             const input: RequestSessionInput = {
                 teacher: { name: teacher.name, email: teacher.email },
                 learner: { name: learner.name, email: learner.email, id: learner.id },
@@ -87,23 +94,25 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
                 sessionId: newSessionRef.id
             };
 
-            const result = await requestSession(input);
-            if (result.success) {
-                toast({
-                    title: "Request Sent!",
-                    description: "The teacher has been notified. Your credits will be deducted upon their acceptance.",
-                });
-                setIsOpen(false);
-            } else {
-                // If notification fails, we should ideally delete the session request.
-                // For MVP, we'll show an error.
-                throw new Error(result.message);
-            }
+            await requestSession(input);
+            
+            toast({
+                title: "Request Sent!",
+                description: "The teacher has been notified. Your credits have been deducted.",
+            });
+            setIsOpen(false);
+
         } catch (error: any) {
+             // If any step fails, we should ideally refund the credits in a more robust transaction.
+             // For now, we'll just show an error. A backend function would be better for this.
+             const learnerRef = doc(firestore, "users", learner.id);
+             const currentCredits = learner.credits || 0;
+             updateDocumentNonBlocking(learnerRef, { credits: currentCredits }); // Restore original credits
+
              toast({
                 variant: "destructive",
                 title: "Booking Failed",
-                description: error.message || "There was a problem requesting the session.",
+                description: error.message || "There was a problem requesting the session. Your credits have not been charged.",
             });
         } finally {
             setIsLoading(false);
@@ -119,7 +128,7 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
                 <DialogHeader>
                     <DialogTitle>Book a session with {teacher.name}</DialogTitle>
                     <DialogDescription>
-                        Select a skill and a time slot. 1 credit will be transferred when the teacher accepts your request.
+                        Select a skill and a time slot. 1 credit will be deducted from your account now and held until the session is completed.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -157,10 +166,12 @@ export function ScheduleSlotDialog({ user: teacher, currentUser: learner }: { us
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button onClick={handleBooking} disabled={isLoading}>
-                        {isLoading ? "Sending Request..." : "Send Request"}
+                        {isLoading ? "Sending Request..." : "Send Request & Deduct 1 Credit"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
+
+    

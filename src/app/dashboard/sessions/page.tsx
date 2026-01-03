@@ -38,13 +38,14 @@ const statusColors = {
 
 
 const SessionCard = ({ session, currentUser }: { session: Session, currentUser: User | null }) => {
-    const { firestore, user: authUser } = useFirebase();
+    const { firestore } = useFirebase();
     const { toast } = useToast();
     const isTeacher = session.teacherId === currentUser?.id;
     const [teacher, setTeacher] = React.useState<any>(null);
     const [learner, setLearner] = React.useState<any>(null);
     const [showCountdown, setShowCountdown] = React.useState(false);
     const [countdown, setCountdown] = React.useState("");
+    const [isJoining, setIsJoining] = React.useState(false);
 
     React.useEffect(() => {
         if (firestore && session) {
@@ -103,30 +104,68 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
     
     const handleJoinNow = async () => {
         if (!firestore) return;
-        
+    
         const now = new Date();
         const startTime = session.sessionDate.toDate();
-
+    
         if (now < startTime) {
             setShowCountdown(true);
             return;
         }
-
-        const meetLink = session.googleMeetLink;
-
-        if (!meetLink) {
+    
+        setIsJoining(true);
+    
+        try {
+            let meetLink = session.googleMeetLink;
+    
+            // 1. If link doesn't exist, only the teacher can create it.
+            if (!meetLink) {
+                if (isTeacher) {
+                    toast({ title: 'Creating meeting room...', description: 'Please wait a moment.' });
+                    const sessionInput: CreateSessionInput = { sessionId: session.id };
+                    const sessionResult = await createSession(sessionInput);
+    
+                    if (!sessionResult.success || !sessionResult.meetLink) {
+                        throw new Error(sessionResult.message || 'Failed to create Google Meet link.');
+                    }
+                    meetLink = sessionResult.meetLink;
+                    
+                    // 2. Save the newly created link and update status to ongoing
+                    const sessionRef = doc(firestore, 'sessions', session.id);
+                    await updateDoc(sessionRef, { 
+                        googleMeetLink: meetLink,
+                        status: 'ongoing'
+                    });
+                } else {
+                    // Learner tries to join before teacher has created the link
+                    toast({
+                        variant: 'destructive',
+                        title: 'Not ready yet',
+                        description: 'The teacher has not started the session. Please try again shortly.',
+                    });
+                    setIsJoining(false);
+                    return;
+                }
+            } else {
+                 // If link exists, just update status to ongoing if it's not already
+                 if (session.status !== 'ongoing') {
+                    const sessionRef = doc(firestore, 'sessions', session.id);
+                    await updateDoc(sessionRef, { status: 'ongoing' });
+                }
+            }
+    
+            // 3. Redirect user to the meeting link
+            window.open(meetLink, '_blank');
+    
+        } catch (error: any) {
             toast({
                 variant: 'destructive',
-                title: 'No Meeting Link',
-                description: 'The meeting link has not been generated for this session yet.',
+                title: 'Error Joining Session',
+                description: error.message || 'Could not join the session.',
             });
-            return;
+        } finally {
+            setIsJoining(false);
         }
-            
-        const sessionRef = doc(firestore, 'sessions', session.id);
-        updateDocumentNonBlocking(sessionRef, { status: 'ongoing' });
-
-        window.open(meetLink, '_blank');
     };
     
     const handleEndSession = async () => {
@@ -181,13 +220,14 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
                     </div>
                     {['scheduled', 'ongoing'].includes(session.status) && (
                         <div className="flex gap-2">
-                             {isTeacher && (
+                             {isTeacher && session.status === 'ongoing' && (
                                 <Button variant="destructive" size="sm" onClick={handleEndSession}>
                                     <LogOut className="mr-2 h-4 w-4" /> End Session
                                 </Button>
                             )}
-                            <Button onClick={handleJoinNow}>
-                                <Video className="mr-2 h-4 w-4" /> Join Now
+                            <Button onClick={handleJoinNow} disabled={isJoining}>
+                                <Video className="mr-2 h-4 w-4" /> 
+                                {isJoining ? 'Joining...' : 'Join Now'}
                             </Button>
                         </div>
                     )}
@@ -263,33 +303,23 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
          setIsLoading(true);
          toast({
             title: 'Accepting Request...',
-            description: 'Generating Meet link and scheduling session.',
+            description: 'Scheduling session.',
         });
         try {
-            // Step 1: Generate the Google Meet link via the AI flow.
-            const sessionInput: CreateSessionInput = { sessionId: session.id };
-            const sessionResult = await createSession(sessionInput);
-
-            if (!sessionResult.success || !sessionResult.meetLink) {
-                 throw new Error(sessionResult.message || 'Failed to create Google Meet link.');
-            }
-            
-            // Step 2: Update session status to 'scheduled' and add the Meet link.
+            // Update session status to 'scheduled'. The Meet link will be created
+            // by the teacher when they click "Join Now".
             const sessionRef = doc(firestore, 'sessions', session.id);
             updateDocumentNonBlocking(sessionRef, { 
                 status: 'scheduled',
-                googleMeetLink: sessionResult.meetLink,
             });
 
-            // Step 3: Update teacher's credits ONLY.
-            const teacherRef = doc(firestore, 'users', teacher.id);
-            updateDocumentNonBlocking(teacherRef, { credits: (teacher.credits || 0) + session.creditsTransferred });
-
-            // The learner's credits are implicitly handled by the shared session document status.
+            // The learner's credits are deducted when they send the request.
+            // The teacher's credits are awarded upon session completion.
+            // So, no credit transaction happens here.
 
             toast({
                 title: 'Request Accepted!',
-                description: 'The session has been scheduled. Credits will be transferred upon completion.',
+                description: 'The session has been scheduled.',
             });
 
         } catch(error: any) {
@@ -303,14 +333,24 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
         }
     };
     
-    // This simulates declining a request.
     const handleDecline = () => {
-        if (!firestore) return;
+        if (!firestore || !learner) return;
+        
         const sessionRef = doc(firestore, 'sessions', session.id);
         updateDocumentNonBlocking(sessionRef, { status: 'cancelled' });
+
+        // Return credits to the learner
+        const learnerRef = doc(firestore, 'users', learner.id);
+        getDoc(learnerRef).then(docSnap => {
+            if (docSnap.exists()) {
+                const currentCredits = docSnap.data().credits || 0;
+                updateDocumentNonBlocking(learnerRef, { credits: currentCredits + session.creditsTransferred });
+            }
+        });
+
         toast({
             title: 'Request Declined',
-            description: `You have declined the session request.`
+            description: `You have declined the session request. The credits have been returned to the learner.`
         });
     };
     
@@ -337,7 +377,7 @@ const RequestCard = ({ session, currentUser }: { session: Session, currentUser: 
             <CardFooter className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={handleDecline} disabled={isLoading}><X className="mr-2 h-4 w-4"/>Decline</Button>
                 <Button size="sm" onClick={handleAccept} disabled={isLoading}>
-                    {isLoading ? 'Accepting...' : <><Check className="mr-2 h-4 w-4"/>Accept & Create Meet</>}
+                    {isLoading ? 'Accepting...' : <><Check className="mr-2 h-4 w-4"/>Accept Request</>}
                 </Button>
             </CardFooter>
         </Card>
@@ -442,7 +482,5 @@ export default function SessionsPage() {
         </div>
     );
 }
-
-    
 
     
