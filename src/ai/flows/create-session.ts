@@ -31,7 +31,8 @@ const createMeetLink = ai.defineTool(
   async (input) => {
     try {
       // Use Application Default Credentials.
-      // In a Google Cloud environment, 'googleapis' will automatically find the service account.
+      // In a Google Cloud environment (like Firebase App Hosting), googleapis will
+      // automatically find the service account credentials without any manual setup.
       const auth = new google.auth.GoogleAuth({
           scopes: ['https://www.googleapis.com/auth/calendar'],
       });
@@ -66,9 +67,9 @@ const createMeetLink = ai.defineTool(
       return { hangoutLink: meetLink };
 
     } catch (e: any) {
-      console.error('Error creating Google Meet link:', e.message);
+      console.error('Error creating Google Meet link:', e);
       // In case of an API error, we must throw to prevent inconsistent states.
-      throw new Error('Could not create Google Meet link via API. Please check service account permissions and ensure the Google Calendar API is enabled.');
+      throw new Error('Could not create Google Meet link via API. This is likely an authentication issue. Ensure the service account has domain-wide delegation for Google Calendar.');
     }
   }
 );
@@ -150,7 +151,7 @@ const createSessionFlow = ai.defineFlow(
       };
 
     } catch (error: any) {
-        console.error(`[createSessionFlow] Error for session ${sessionId}:`, error.message);
+        console.error(`[createSessionFlow] Error for session ${sessionId}:`, error);
         return {
             success: false,
             message: error.message || 'An unexpected error occurred.',
