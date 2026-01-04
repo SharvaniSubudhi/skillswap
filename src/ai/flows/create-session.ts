@@ -11,11 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { google } from 'googleapis';
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase';
-
-// Initialize Firebase Admin-like services on the server
-// We can't use firebase-admin directly in this environment, but we can get the server-side firestore instance.
-const { firestore } = initializeFirebase();
+import { firestore } from '@/firebase/server-init';
 
 // Define schema for the tool input
 const CreateMeetLinkInputSchema = z.object({
