@@ -66,7 +66,7 @@ const createMeetLink = ai.defineTool(
     } catch (e: any) {
       console.error('Error creating Google Meet link:', e.message);
       // In case of an API error, we must throw to prevent inconsistent states.
-      throw new Error('Could not create Google Meet link via API. Please check service account permissions.');
+      throw new Error('Could not create Google Meet link via API. Please check service account permissions and ensure the Google Calendar API is enabled.');
     }
   }
 );
