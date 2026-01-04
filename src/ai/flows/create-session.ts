@@ -10,7 +10,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { google } from 'googleapis';
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/firebase/server-init';
 
 // Define schema for the tool input
@@ -30,8 +30,10 @@ const createMeetLink = ai.defineTool(
   },
   async (input) => {
     try {
+      // Use Application Default Credentials.
+      // In a Google Cloud environment, 'googleapis' will automatically find the service account.
       const auth = new google.auth.GoogleAuth({
-        scopes: ['https://www.googleapis.com/auth/calendar'],
+          scopes: ['https://www.googleapis.com/auth/calendar'],
       });
       const authClient = await auth.getClient();
       const calendar = google.calendar({ version: 'v3', auth: authClient });
