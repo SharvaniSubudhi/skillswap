@@ -3,12 +3,19 @@
 
 /**
  * @fileOverview This file defines a Genkit flow for creating a session,
- * which includes creating a Google Meet link.
+ * which includes creating a Google Meet link. This flow ensures only one
+ * link is ever created per session using a "get-or-create" pattern.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { google } from 'googleapis';
+import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+
+// Initialize Firebase Admin-like services on the server
+// We can't use firebase-admin directly in this environment, but we can get the server-side firestore instance.
+const { firestore } = initializeFirebase();
 
 // Define schema for the tool input
 const CreateMeetLinkInputSchema = z.object({
@@ -19,64 +26,51 @@ const CreateMeetLinkInputSchema = z.object({
 const createMeetLink = ai.defineTool(
   {
     name: 'createMeetLink',
-    description: 'Creates a Google Meet link by creating and then deleting a temporary calendar event.',
+    description: 'Creates a Google Meet link for a session.',
     inputSchema: CreateMeetLinkInputSchema,
     outputSchema: z.object({
       hangoutLink: z.string().describe('The Google Meet link for the event.'),
     }),
   },
   async (input) => {
-    // This uses a service account with domain-wide delegation to a user's calendar.
-    // In a real production app, a full OAuth2 flow for user consent would be required.
-    // For this example, we simulate this by creating a temporary event to generate a link.
     try {
-        const auth = new google.auth.GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/calendar'],
-            // Ensure your service account has access to the Calendar API
-            // and necessary permissions.
-          });
-          const authClient = await auth.getClient();
-          const calendar = google.calendar({ version: 'v3', auth: authClient });
+      const auth = new google.auth.GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/calendar'],
+      });
+      const authClient = await auth.getClient();
+      const calendar = google.calendar({ version: 'v3', auth: authClient });
 
-          // Create a temporary event to generate the Meet link
-          const event = {
-            summary: 'SkillSwap Session',
-            description: `Session ID: ${input.requestId}`,
-            start: { dateTime: new Date().toISOString(), timeZone: 'UTC' },
-            end: { dateTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(), timeZone: 'UTC' },
-            conferenceData: {
-              createRequest: {
-                requestId: input.requestId,
-                conferenceSolutionKey: { type: 'hangoutsMeet' },
-              },
-            },
-          };
+      const event = {
+        summary: 'SkillSwap Session',
+        description: `Session ID: ${input.requestId}`,
+        start: { dateTime: new Date().toISOString(), timeZone: 'UTC' },
+        end: { dateTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(), timeZone: 'UTC' },
+        conferenceData: {
+          createRequest: {
+            requestId: input.requestId,
+            conferenceSolutionKey: { type: 'hangoutsMeet' },
+          },
+        },
+      };
 
-          const res = await calendar.events.insert({
-            calendarId: 'primary',
-            // @ts-ignore
-            resource: event,
-            conferenceDataVersion: 1,
-          });
+      const res = await calendar.events.insert({
+        calendarId: 'primary',
+        resource: event,
+        conferenceDataVersion: 1,
+      });
 
-          const meetLink = res.data.hangoutLink;
-          const eventId = res.data.id;
+      const meetLink = res.data.hangoutLink;
 
-          // IMPORTANT: Delete the temporary event immediately after getting the link
-          if (eventId) {
-            await calendar.events.delete({ calendarId: 'primary', eventId: eventId });
-          }
-          
-          if (!meetLink) {
-            throw new Error('Failed to extract Google Meet link from the created event.');
-          }
+      if (!meetLink) {
+        throw new Error('Failed to extract Google Meet link from the created event.');
+      }
 
-          return { hangoutLink: meetLink };
+      return { hangoutLink: meetLink };
 
     } catch (e: any) {
-      console.error('Error creating Google Meet link via temporary event:', e.message);
-      // As a fallback, return a static link to prevent total failure.
-      return { hangoutLink: 'https://meet.google.com/new' };
+      console.error('Error creating Google Meet link:', e.message);
+      // In case of an API error, we must throw to prevent inconsistent states.
+      throw new Error('Could not create Google Meet link via API. Please check service account permissions.');
     }
   }
 );
@@ -85,6 +79,7 @@ const createMeetLink = ai.defineTool(
 // Define the main flow schema
 const CreateSessionInputSchema = z.object({
   sessionId: z.string(),
+  userId: z.string(), // ID of the user requesting the link
 });
 export type CreateSessionInput = z.infer<typeof CreateSessionInputSchema>;
 
@@ -104,22 +99,66 @@ const createSessionFlow = ai.defineFlow(
     outputSchema: CreateSessionOutputSchema,
   },
   async (input) => {
-    
-    // Call the tool to generate the meet link
-    const meetLinkResult = await createMeetLink({ requestId: input.sessionId });
+    const { sessionId, userId } = input;
+    const sessionRef = doc(firestore, 'sessions', sessionId);
 
-    if (!meetLinkResult || !meetLinkResult.hangoutLink) {
+    try {
+      // ATOMIC GET-OR-CREATE LOGIC
+      // 1. Get the latest session data from Firestore.
+      const sessionSnap = await getDoc(sessionRef);
+
+      if (!sessionSnap.exists()) {
+        throw new Error('Session document not found.');
+      }
+
+      const sessionData = sessionSnap.data();
+
+      // 2. If a link already exists, return it immediately.
+      if (sessionData.googleMeetLink) {
+        return {
+          success: true,
+          message: 'Meet link already exists.',
+          meetLink: sessionData.googleMeetLink,
+        };
+      }
+
+      // 3. If no link, check if the current user is the teacher. Only teachers can create links.
+      if (sessionData.teacherId !== userId) {
         return {
             success: false,
-            message: 'Failed to create Google Meet link.',
+            message: 'Waiting for the teacher to start the session and create the link.',
+            meetLink: undefined,
+        };
+      }
+      
+      // 4. If link doesn't exist and user is teacher, create it.
+      const meetLinkResult = await createMeetLink({ requestId: sessionId });
+
+      if (!meetLinkResult || !meetLinkResult.hangoutLink) {
+          throw new Error('Tool did not return a Google Meet link.');
+      }
+
+      // 5. Atomically save the new link back to the document.
+      await updateDoc(sessionRef, {
+        googleMeetLink: meetLinkResult.hangoutLink,
+        status: 'ongoing', // Also update the status
+      });
+
+      // 6. Return the newly created link.
+      return {
+        success: true,
+        message: 'Meet link created successfully.',
+        meetLink: meetLinkResult.hangoutLink,
+      };
+
+    } catch (error: any) {
+        console.error(`[createSessionFlow] Error for session ${sessionId}:`, error.message);
+        return {
+            success: false,
+            message: error.message || 'An unexpected error occurred.',
+            meetLink: undefined,
         };
     }
-
-    return {
-      success: true,
-      message: 'Meet link created successfully.',
-      meetLink: meetLinkResult.hangoutLink,
-    };
   }
 );
 

@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 
 type CreateSessionInput = {
     sessionId: string;
+    userId: string;
 };
 
 
@@ -103,7 +104,7 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
     }
     
     const handleJoinNow = async () => {
-        if (!firestore) return;
+        if (!currentUser) return;
     
         const now = new Date();
         const startTime = session.sessionDate.toDate();
@@ -116,52 +117,35 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
         setIsJoining(true);
     
         try {
-            let meetLink = session.googleMeetLink;
-    
-            // 1. If link doesn't exist, only the teacher can create it.
-            if (!meetLink) {
-                if (isTeacher) {
-                    toast({ title: 'Creating meeting room...', description: 'Please wait a moment.' });
-                    const sessionInput: CreateSessionInput = { sessionId: session.id };
-                    const sessionResult = await createSession(sessionInput);
-    
-                    if (!sessionResult.success || !sessionResult.meetLink) {
-                        throw new Error(sessionResult.message || 'Failed to create Google Meet link.');
-                    }
-                    meetLink = sessionResult.meetLink;
-                    
-                    // 2. Save the newly created link and update status to ongoing
-                    const sessionRef = doc(firestore, 'sessions', session.id);
-                    await updateDoc(sessionRef, { 
-                        googleMeetLink: meetLink,
-                        status: 'ongoing'
-                    });
-                } else {
-                    // Learner tries to join before teacher has created the link
-                    toast({
-                        variant: 'destructive',
-                        title: 'Not ready yet',
-                        description: 'The teacher has not started the session. Please try again shortly.',
-                    });
-                    setIsJoining(false);
-                    return;
-                }
-            } else {
-                 // If link exists, just update status to ongoing if it's not already
-                 if (session.status !== 'ongoing') {
-                    const sessionRef = doc(firestore, 'sessions', session.id);
-                    await updateDoc(sessionRef, { status: 'ongoing' });
-                }
+            // The frontend's only job is to call the single authoritative backend flow.
+            toast({ title: 'Finding your session...', description: 'Please wait a moment.' });
+            
+            const sessionInput: CreateSessionInput = { 
+                sessionId: session.id,
+                userId: currentUser.id 
+            };
+
+            const result = await createSession(sessionInput);
+
+            if (!result.success || !result.meetLink) {
+                // Display messages from the backend, like "Waiting for teacher..."
+                toast({
+                    variant: 'destructive',
+                    title: 'Session not ready',
+                    description: result.message || 'Could not get a meeting link.',
+                });
+                setIsJoining(false);
+                return;
             }
-    
-            // 3. Redirect user to the meeting link
-            window.open(meetLink, '_blank');
+            
+            // If successful, redirect to the one true link.
+            window.open(result.meetLink, '_blank');
     
         } catch (error: any) {
             toast({
                 variant: 'destructive',
                 title: 'Error Joining Session',
-                description: error.message || 'Could not join the session.',
+                description: error.message || 'An unexpected error occurred.',
             });
         } finally {
             setIsJoining(false);
@@ -482,5 +466,3 @@ export default function SessionsPage() {
         </div>
     );
 }
-
-    
