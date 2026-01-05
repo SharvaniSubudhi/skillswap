@@ -112,7 +112,7 @@ const createSessionFlow = ai.defineFlow(
 
       const sessionData = sessionSnap.data();
 
-      // 2. If a link already exists, return it immediately.
+      // 2. If a link already exists, return it immediately. This is the "get" part.
       if (sessionData.googleMeetLink) {
         return {
           success: true,
@@ -121,7 +121,7 @@ const createSessionFlow = ai.defineFlow(
         };
       }
 
-      // 3. If no link, check if the current user is the teacher. Only teachers can create links.
+      // 3. If no link exists, check if the current user is the teacher. Only teachers can create links.
       if (sessionData.teacherId !== userId) {
         return {
             success: false,
@@ -130,7 +130,7 @@ const createSessionFlow = ai.defineFlow(
         };
       }
       
-      // 4. If link doesn't exist and user is teacher, create it.
+      // 4. If link doesn't exist and user is the teacher, create it. This is the "create" part.
       const meetLinkResult = await createMeetLink({ requestId: sessionId });
 
       if (!meetLinkResult || !meetLinkResult.hangoutLink) {
@@ -138,6 +138,7 @@ const createSessionFlow = ai.defineFlow(
       }
 
       // 5. Atomically save the new link back to the document.
+      // This update makes the link available to all other callers.
       await updateDoc(sessionRef, {
         googleMeetLink: meetLinkResult.hangoutLink,
         status: 'ongoing', // Also update the status

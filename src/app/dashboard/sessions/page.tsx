@@ -11,16 +11,11 @@ import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
 import type { Session, User } from "@/lib/types";
 import { formatInTimeZone } from "date-fns-tz";
 import { Video, Star, MessageSquare, AlertCircle, Check, X, LogOut, Clock } from "lucide-react";
-import { createSession } from "@/ai/flows/create-session";
+import { createSession, type CreateSessionInput } from "@/ai/flows/create-session";
 import { useToast } from "@/hooks/use-toast";
 import { doc, getDoc, updateDoc, collection, query, where } from "firebase/firestore";
 import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
-
-type CreateSessionInput = {
-    sessionId: string;
-    userId: string;
-};
 
 
 const getInitials = (name: string) => {
@@ -65,7 +60,9 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
      const calculateCountdown = React.useCallback(() => {
         if (!session.sessionDate) return;
         const now = new Date().getTime();
-        const startTime = session.sessionDate.toDate().getTime();
+        // Firestore timestamps need to be converted to JS Dates.
+        const startTime = session.sessionDate.toDate ? session.sessionDate.toDate().getTime() : new Date(session.sessionDate).getTime();
+
         const distance = startTime - now;
 
         if (distance < 0) {
@@ -107,7 +104,7 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
         if (!currentUser) return;
     
         const now = new Date();
-        const startTime = session.sessionDate.toDate();
+        const startTime = session.sessionDate.toDate ? session.sessionDate.toDate() : new Date(session.sessionDate);
     
         if (now < startTime) {
             setShowCountdown(true);
@@ -127,19 +124,17 @@ const SessionCard = ({ session, currentUser }: { session: Session, currentUser: 
 
             const result = await createSession(sessionInput);
 
-            if (!result.success || !result.meetLink) {
+            if (result.success && result.meetLink) {
+                 // If successful, redirect to the one true link.
+                window.open(result.meetLink, '_blank');
+            } else {
                 // Display messages from the backend, like "Waiting for teacher..."
                 toast({
-                    variant: 'destructive',
+                    variant: 'default',
                     title: 'Session not ready',
                     description: result.message || 'Could not get a meeting link.',
                 });
-                setIsJoining(false);
-                return;
             }
-            
-            // If successful, redirect to the one true link.
-            window.open(result.meetLink, '_blank');
     
         } catch (error: any) {
             toast({
